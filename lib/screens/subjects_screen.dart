@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../data/subject_curriculum.dart';
 import 'subject_units_screen.dart';
+import 'chat_screen.dart';
 
 /// المواد الدراسية — شبكة من 6 مواد؛ الضغط يفتح شاشة الوحدات الست.
 class SubjectsScreen extends StatelessWidget {
@@ -80,6 +81,12 @@ class SubjectsScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.of(context).push(ChatScreen.route()),
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        child: const Icon(Icons.auto_awesome_rounded),
       ),
     );
   }

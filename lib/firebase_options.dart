@@ -28,27 +28,27 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: 'YOUR-APP-ID',
-    messagingSenderId: 'YOUR-SENDER-ID',
-    projectId: 'YOUR-PROJECT-ID',
-    storageBucket: 'YOUR-STORAGE-BUCKET',
+    apiKey: 'AIzaSyAZrmpoyXpxQesLhwCfwkYpowNNLd7F_FQ',
+    appId: '1:662993550710:android:bac1abbaca7edf7a014e57',
+    messagingSenderId: '662993550710',
+    projectId: 'saqer-b5e7d',
+    storageBucket: 'saqer-b5e7d.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: 'YOUR-APP-ID',
-    messagingSenderId: 'YOUR-SENDER-ID',
-    projectId: 'YOUR-PROJECT-ID',
-    storageBucket: 'YOUR-STORAGE-BUCKET',
-    iosBundleId: 'com.example.smartSchool',
+    apiKey: 'AIzaSyAZrmpoyXpxQesLhwCfwkYpowNNLd7F_FQ',
+    appId: '1:662993550710:ios:placeholder', // Placeholder as not in json
+    messagingSenderId: '662993550710',
+    projectId: 'saqer-b5e7d',
+    storageBucket: 'saqer-b5e7d.firebasestorage.app',
+    iosBundleId: 'com.example.smart_school1',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'YOUR-API-KEY',
-    appId: 'YOUR-APP-ID',
-    messagingSenderId: 'YOUR-SENDER-ID',
-    projectId: 'YOUR-PROJECT-ID',
-    storageBucket: 'YOUR-STORAGE-BUCKET',
+    apiKey: 'AIzaSyAZrmpoyXpxQesLhwCfwkYpowNNLd7F_FQ',
+    appId: '1:662993550710:web:placeholder', // Placeholder
+    messagingSenderId: '662993550710',
+    projectId: 'saqer-b5e7d',
+    storageBucket: 'saqer-b5e7d.firebasestorage.app',
   );
 }

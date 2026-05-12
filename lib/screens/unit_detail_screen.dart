@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/firebase_service.dart';
 import '../user_profile_store.dart';
 import '../data/subject_curriculum.dart';
+import 'chat_screen.dart';
 
 class UnitDetailScreen extends StatefulWidget {
   const UnitDetailScreen({
@@ -213,6 +214,18 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context).push(
+            ChatScreen.route(
+              subjectTitle: '${widget.subject.title} - ${widget.unit.title}',
+            ),
+          );
+        },
+        backgroundColor: widget.subject.color,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.auto_awesome_rounded),
       ),
     );
   }

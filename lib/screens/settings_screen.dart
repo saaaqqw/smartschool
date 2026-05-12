@@ -8,6 +8,7 @@ import '../user_profile_store.dart';
 import '../services/firebase_service.dart';
 import 'register_screen.dart';
 import 'welcome_screen.dart';
+import '../l10n/app_localizations.dart';
 
 const double _kSettingsCardRadius = 20;
 
@@ -59,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         surfaceTintColor: Colors.transparent,
         title: Text(
-          'الإعدادات',
+          AppLocalizations.of(context).translate('settings'),
           style: GoogleFonts.tajawal(
             fontWeight: FontWeight.w700,
             fontSize: 20,
@@ -71,7 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildProfileHeader(context, scheme),
           const SizedBox(height: 28),
-          _buildCategoryLabel('الحساب', scheme),
+          _buildCategoryLabel(AppLocalizations.of(context).translate('account'), scheme),
           const SizedBox(height: 10),
           _SettingsCard(
             scheme: scheme,
@@ -106,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     final dark = mode == ThemeMode.dark;
                     return _SwitchTile(
                       icon: Icons.dark_mode_outlined,
-                      label: 'الوضع الليلي',
+                      label: AppLocalizations.of(context).translate('dark_mode'),
                       value: dark,
                       onChanged: (v) {
                         appThemeModeNotifier.value =
@@ -134,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          _buildCategoryLabel('الدعم', scheme),
+          _buildCategoryLabel(AppLocalizations.of(context).translate('support'), scheme),
           const SizedBox(height: 10),
           _SettingsCard(
             scheme: scheme,
@@ -142,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _ChevronTile(
                   icon: Icons.help_outline,
-                  label: 'مركز المساعدة',
+                  label: AppLocalizations.of(context).translate('help_center'),
                   onTap: () => _showM3InfoDialog(
                     context,
                     icon: Icons.help_outline,
@@ -154,7 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(scheme),
                 _ChevronTile(
                   icon: Icons.description_outlined,
-                  label: 'شروط الخدمة',
+                  label: AppLocalizations.of(context).translate('terms_of_service'),
                   onTap: () => _showM3InfoDialog(
                     context,
                     icon: Icons.description_outlined,
@@ -166,7 +167,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(scheme),
                 _ChevronTile(
                   icon: Icons.group_outlined,
-                  label: 'فريق العمل',
+                  label: AppLocalizations.of(context).translate('team'),
                   onTap: () => _showM3InfoDialog(
                     context,
                     icon: Icons.group_outlined,
@@ -183,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => _showLogoutDialog(context),
             icon: const Icon(Icons.logout_rounded, size: 22),
             label: Text(
-              'تسجيل الخروج',
+              AppLocalizations.of(context).translate('logout'),
               style: GoogleFonts.tajawal(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -203,7 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 20),
           Center(
             child: Text(
-              'المدرسة الذكية — الإصدار 1.0.0',
+              AppLocalizations.of(context).translate('version'),
               style: GoogleFonts.tajawal(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -697,7 +698,7 @@ class _LanguageTile extends StatelessWidget {
         ),
       ),
       title: Text(
-        'تغيير اللغة',
+        AppLocalizations.of(context).translate('change_language'),
         textAlign: TextAlign.right,
         style: GoogleFonts.tajawal(
           fontSize: 16,

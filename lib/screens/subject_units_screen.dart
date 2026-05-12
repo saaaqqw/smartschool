@@ -5,6 +5,7 @@ import '../services/firebase_service.dart';
 import '../user_profile_store.dart';
 import '../data/subject_curriculum.dart';
 import 'unit_detail_screen.dart';
+import 'chat_screen.dart';
 
 class SubjectUnitsScreen extends StatefulWidget {
   const SubjectUnitsScreen({
@@ -45,6 +46,12 @@ class SubjectUnitsScreen extends StatefulWidget {
 class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
   final _firebaseService = FirebaseService();
 
+  void _openChat() {
+    Navigator.of(context).push(
+      ChatScreen.route(subjectTitle: widget.subject.title),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -70,7 +77,8 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                 backgroundColor: widget.subject.color.withValues(alpha: 0.12),
                 surfaceTintColor: widget.subject.color.withValues(alpha: 0.3),
                 leading: IconButton(
-                  icon: Icon(Icons.arrow_forward_rounded, color: scheme.onSurface),
+                  icon: Icon(Icons.arrow_forward_rounded,
+                      color: scheme.onSurface),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 title: Text(
@@ -110,7 +118,8 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                   itemBuilder: (context, index) {
                     final unit = widget.subject.units[index];
                     // Use Firestore progress if available, otherwise fallback to local/demo
-                    final firestoreProgress = progressData[unit.title] as double?;
+                    final firestoreProgress =
+                        progressData[unit.title] as double?;
                     final currentProgress = firestoreProgress ?? unit.progress;
 
                     return _UnitCard(
@@ -134,6 +143,12 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
             ],
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openChat,
+        backgroundColor: widget.subject.color,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.auto_awesome_rounded),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'locale_notifier.dart';
+import 'l10n/app_localizations.dart';
 import 'screens/welcome_screen.dart';
 import 'theme_notifier.dart';
 import 'user_profile_store.dart';
@@ -62,6 +63,7 @@ class SmartSchoolApp extends StatelessWidget {
                 Locale('en', 'US'),
               ],
               localizationsDelegates: const [
+                AppLocalizations.delegate,
                 GlobalMaterialLocalizations.delegate,
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,

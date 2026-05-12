@@ -8,9 +8,11 @@ import 'grades_screen.dart';
 import 'settings_screen.dart';
 import 'study_plan_screen.dart';
 import 'subjects_screen.dart';
+import 'chat_screen.dart';
 
 import '../services/firebase_service.dart';
 import '../data/subject_curriculum.dart';
+import '../l10n/app_localizations.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigateToPage});
@@ -136,6 +138,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               () => Navigator.of(context).push(StudyPlanScreen.route()),
                             );
                           },
+                          onChat: () {
+                            Navigator.of(context).push(ChatScreen.route());
+                          },
                         ),
                       ),
                     ),
@@ -188,7 +193,7 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'مرحباً بك يا $first',
+                '${AppLocalizations.of(context).translate('welcome_back')} $first',
                 style: GoogleFonts.tajawal(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -197,7 +202,7 @@ class _Header extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'الصف: ${profile.grade}',
+                '${AppLocalizations.of(context).translate('grade')} ${profile.grade}',
                 style: GoogleFonts.tajawal(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -254,7 +259,7 @@ class _TodayPlanCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'خطة اليوم',
+                    AppLocalizations.of(context).translate('today_plan'),
                     style: GoogleFonts.tajawal(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -301,7 +306,7 @@ class _TodayPlanCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'تم الإنجاز',
+                          AppLocalizations.of(context).translate('completed'),
                           style: GoogleFonts.tajawal(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
@@ -337,11 +342,13 @@ class _QuickActions extends StatelessWidget {
     required this.onStartStudy,
     required this.onGrades,
     required this.onReview,
+    required this.onChat,
   });
 
   final VoidCallback onStartStudy;
   final VoidCallback onGrades;
   final VoidCallback onReview;
+  final VoidCallback onChat;
 
   @override
   Widget build(BuildContext context) {
@@ -392,7 +399,7 @@ class _QuickActions extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'اختصارات سريعة',
+          AppLocalizations.of(context).translate('quick_actions'),
           style: GoogleFonts.tajawal(
             fontSize: 17,
             fontWeight: FontWeight.w700,
@@ -403,22 +410,28 @@ class _QuickActions extends StatelessWidget {
         Row(
           children: [
             action(
-              label: 'بدء الدراسة',
+              label: AppLocalizations.of(context).translate('start_study'),
               icon: Icons.play_circle_filled_rounded,
               color: const Color(0xFF00897B),
               onTap: onStartStudy,
             ),
             action(
-              label: 'الدرجات',
+              label: AppLocalizations.of(context).translate('grades'),
               icon: Icons.bar_chart_rounded,
               color: const Color(0xFF5E35B1),
               onTap: onGrades,
             ),
             action(
-              label: 'المراجعة',
+              label: AppLocalizations.of(context).translate('review'),
               icon: Icons.auto_stories_rounded,
               color: const Color(0xFFE65100),
               onTap: onReview,
+            ),
+            action(
+              label: AppLocalizations.of(context).translate('ai_assistant'),
+              icon: Icons.auto_awesome_rounded,
+              color: scheme.primary,
+              onTap: onChat,
             ),
           ],
         ),
