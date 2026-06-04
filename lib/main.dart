@@ -7,12 +7,14 @@ import 'firebase_options.dart';
 import 'locale_notifier.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/welcome_screen.dart';
+import 'screens/main_navigation_screen.dart';
 import 'theme_notifier.dart';
 import 'user_profile_store.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -71,7 +73,9 @@ class SmartSchoolApp extends StatelessWidget {
               themeMode: mode,
               theme: _themedBase(Brightness.light, locale),
               darkTheme: _themedBase(Brightness.dark, locale),
-              home: const WelcomeScreen(),
+              home: (FirebaseAuth.instance.currentUser != null)
+                  ? const MainNavigationScreen()
+                  : const WelcomeScreen(),
             );
           },
         );

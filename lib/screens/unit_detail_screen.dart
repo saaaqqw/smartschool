@@ -23,8 +23,7 @@ class UnitDetailScreen extends StatefulWidget {
     required int unitIndex,
   }) {
     return PageRouteBuilder<void>(
-      pageBuilder: (context, animation, secondaryAnimation) =>
-          UnitDetailScreen(
+      pageBuilder: (context, animation, secondaryAnimation) => UnitDetailScreen(
         subject: subject,
         unit: unit,
         unitIndex: unitIndex,
@@ -206,13 +205,117 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            'سيتم عرض دروس هذا الفصل، والفيديوهات، والاختبارات القصيرة هنا بعد ربط المحتوى.',
+            'قائمة الدروس (10) لهذه الوحدة:',
             style: GoogleFonts.tajawal(
               fontSize: 15,
-              height: 1.5,
               color: scheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 12),
+          ...List<Widget>.generate(10, (i) {
+            final lessonNumber = i + 1;
+            return Card(
+              elevation: 0,
+              color: widget.subject.color.withValues(alpha: 0.08),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: widget.subject.color.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.school_rounded,
+                    color: widget.subject.color,
+                  ),
+                ),
+                title: Text(
+                  'الدرس $lessonNumber',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                subtitle: Text(
+                  'اكتب المحتوى لاحقًا (درس $lessonNumber)',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                trailing: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'تحديد كمكتمل للدرس',
+                      icon: const Icon(Icons.check_circle_rounded),
+                      color: widget.subject.color,
+                      onPressed: _isUpdating
+                          ? null
+                          : () async {
+                              // حالياً نستخدم نفس Progress للوحدة (لا يوجد درس/lesson progress في Firestore).
+                              final uid = userProfileNotifier.value.uid;
+                              if (uid.isEmpty) return;
+
+                              setState(() => _isUpdating = true);
+                              try {
+                                await _firebaseService.updateUnitProgress(
+                                  uid,
+                                  widget.subject.title,
+                                  widget.unit.title,
+                                  1.0,
+                                );
+
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'تم تحديد الدرس $lessonNumber كمكتمل (تجريبي)!',
+                                      style: GoogleFonts.tajawal(),
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'حدث خطأ: $e',
+                                      style: GoogleFonts.tajawal(),
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              } finally {
+                                if (mounted)
+                                  setState(() => _isUpdating = false);
+                              }
+                            },
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'تم اختيار الدرس $lessonNumber',
+                        style: GoogleFonts.tajawal(),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
         ],
       ),
       floatingActionButton: FloatingActionButton(
