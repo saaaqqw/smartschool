@@ -63,7 +63,8 @@ class _ChatScreenState extends State<ChatScreen> {
   // للحصول على المفتاح: Google AI Studio -> API Key
   // مثال: const String _apiKey = 'YOUR_KEY';
   // IMPORTANT: لا تضع المفاتيح داخل كود الإنتاج بدون حماية.
-  static const String _apiKey = 'YOUR_GEMINI_API_KEY_HERE';
+  static const String _apiKey =
+      'YOUR_GEMINI_API_KEY_HERE';
 
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -79,12 +80,12 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = false;
 
   Future<String> _generateReply(String userText) async {
-    if (_apiKey.trim().isEmpty || _apiKey == 'YOUR_REAL_KEY_HERE') {
+    if (_apiKey.trim().isEmpty || _apiKey == 'PUT_YOUR_GEMINI_API_KEY_HERE') {
       return 'من فضلك أضف Gemini API Key داخل chat_screen.dart أولاً.';
     }
 
     final model = GenerativeModel(
-      model: 'gemini-pro',
+      model: 'gemini-1.5-flash',
       apiKey: _apiKey,
       // يمكنك إضافة safety settings أو system instructions حسب رغبتك.
     );
