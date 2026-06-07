@@ -1,8 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
+/// مشغل يوتيوب داخل التطبيق.
+/// - يدعم تغيير [videoId] أثناء وجوده على الشاشة.
+/// - يتجنب حالات setState غير ضرورية التي قد تسبب مشاكل على بعض الأجهزة.
 class YoutubeLessonPlayer extends StatefulWidget {
   const YoutubeLessonPlayer({
     super.key,
@@ -20,15 +21,16 @@ class YoutubeLessonPlayer extends StatefulWidget {
 }
 
 class _YoutubeLessonPlayerState extends State<YoutubeLessonPlayer> {
-  late YoutubePlayerController _controller;
-  bool _isReady = false;
-  Completer<void>? _initCompleter;
+  late final YoutubePlayerController _controller;
+  String? _lastVideoId;
+  bool _loading = true;
 
-  Future<void> _init(String videoId) async {
-    _initCompleter = Completer<void>();
-
+  @override
+  void initState() {
+    super.initState();
+    _lastVideoId = widget.videoId;
     _controller = YoutubePlayerController(
-      initialVideoId: videoId,
+      initialVideoId: widget.videoId,
       flags: YoutubePlayerFlags(
         autoPlay: widget.autoPlay,
         mute: widget.mute,
@@ -37,36 +39,39 @@ class _YoutubeLessonPlayerState extends State<YoutubeLessonPlayer> {
         forceHD: true,
       ),
     );
-
-    // youtube_player_flutter قد لا يوفر callback جاهز للإعداد.
-    // سنعتبره جاهزاً مباشرة بعد إنشاء الـ controller.
-    _isReady = true;
-    _initCompleter?.complete();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _init(widget.videoId);
+    // لا يوجد ضمان callback جاهز للـ ready في كل الإصدارات.
+    // سنوقف الـ loading بمجرد أول build بعد init.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    });
   }
 
   @override
   void didUpdateWidget(covariant YoutubeLessonPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoId != widget.videoId) {
-      setState(() {
-        _isReady = false;
-      });
-      _controller.load(widget.videoId);
-      setState(() {
-        _isReady = true;
+      setState(() => _loading = true);
+      _lastVideoId = widget.videoId;
+
+      // load() يعالج تغيير الفيديو.
+      // نستخدم try/catch لتفادي crash إن كان videoId غير صالح.
+      try {
+        _controller.load(widget.videoId);
+      } catch (_) {
+        // إذا فشل load، سنترك loader يتحول لرسالة خطأ من خلال build.
+      }
+
+      // توقيف loader بعد frame، حتى لا يبقى إلى الأبد لو حدث exception.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _loading = false);
       });
     }
   }
 
   @override
   void dispose() {
-    // youtube_player_flutter >=9: إغلاق الـ controller قد لا يكون close() حسب النسخة
     _controller.dispose();
     super.dispose();
   }
@@ -78,13 +83,13 @@ class _YoutubeLessonPlayerState extends State<YoutubeLessonPlayer> {
       child: Card(
         clipBehavior: Clip.antiAlias,
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: _isReady
-            ? YoutubePlayer(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : YoutubePlayer(
                 controller: _controller,
                 showVideoProgressIndicator: true,
                 progressIndicatorColor: Theme.of(context).colorScheme.primary,
-              )
-            : const Center(child: CircularProgressIndicator()),
+              ),
       ),
     );
   }

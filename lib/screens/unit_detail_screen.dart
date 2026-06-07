@@ -4,6 +4,7 @@ import '../services/firebase_service.dart';
 import '../user_profile_store.dart';
 import '../data/subject_curriculum.dart';
 import 'chat_screen.dart';
+import 'lesson_detail_screen.dart';
 
 class UnitDetailScreen extends StatefulWidget {
   const UnitDetailScreen({
@@ -214,6 +215,11 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
           const SizedBox(height: 12),
           ...List<Widget>.generate(10, (i) {
             final lessonNumber = i + 1;
+
+            // Placeholder videoId لكل درس.
+            // يمكنك لاحقاً استبداله بــ videoId حقيقي من data المنهج.
+            final videoId = 'dQw4w9WgXcQ';
+
             return Card(
               elevation: 0,
               color: widget.subject.color.withValues(alpha: 0.08),
@@ -243,7 +249,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                   ),
                 ),
                 subtitle: Text(
-                  'اكتب المحتوى لاحقًا (درس $lessonNumber)',
+                  'شاهد الدرس + حدده كمكتمل',
                   style: GoogleFonts.tajawal(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
@@ -254,62 +260,31 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      tooltip: 'تحديد كمكتمل للدرس',
-                      icon: const Icon(Icons.check_circle_rounded),
+                      tooltip: 'فتح صفحة الدرس',
+                      icon: const Icon(Icons.play_circle_outline_rounded),
                       color: widget.subject.color,
                       onPressed: _isUpdating
                           ? null
-                          : () async {
-                              // حالياً نستخدم نفس Progress للوحدة (لا يوجد درس/lesson progress في Firestore).
-                              final uid = userProfileNotifier.value.uid;
-                              if (uid.isEmpty) return;
-
-                              setState(() => _isUpdating = true);
-                              try {
-                                await _firebaseService.updateUnitProgress(
-                                  uid,
-                                  widget.subject.title,
-                                  widget.unit.title,
-                                  1.0,
-                                );
-
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'تم تحديد الدرس $lessonNumber كمكتمل (تجريبي)!',
-                                      style: GoogleFonts.tajawal(),
-                                    ),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'حدث خطأ: $e',
-                                      style: GoogleFonts.tajawal(),
-                                    ),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              } finally {
-                                if (mounted)
-                                  setState(() => _isUpdating = false);
-                              }
+                          : () {
+                              Navigator.of(context).push(
+                                LessonDetailScreen.route(
+                                  subject: widget.subject,
+                                  unit: widget.unit,
+                                  lessonNumber: lessonNumber,
+                                  videoId: videoId,
+                                ),
+                              );
                             },
                     ),
                   ],
                 ),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'تم اختيار الدرس $lessonNumber',
-                        style: GoogleFonts.tajawal(),
-                      ),
-                      behavior: SnackBarBehavior.floating,
+                  Navigator.of(context).push(
+                    LessonDetailScreen.route(
+                      subject: widget.subject,
+                      unit: widget.unit,
+                      lessonNumber: lessonNumber,
+                      videoId: videoId,
                     ),
                   );
                 },
