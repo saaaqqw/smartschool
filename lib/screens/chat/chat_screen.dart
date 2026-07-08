@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// NOTE: تأكد أن dependency google_generative_ai موجودة في pubspec.yaml
 import 'package:google_generative_ai/google_generative_ai.dart';
+
+// Run: flutter run --dart-define=GEMINI_API_KEY=your_key_here
+const String _geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+
+bool _isGeminiApiKeyConfigured() =>
+    _geminiApiKey.isNotEmpty && _geminiApiKey != 'PUT_YOUR_GEMINI_API_KEY_HERE';
 
 /// Chat bot screen using Google Gemini (google_generative_ai).
 ///
@@ -59,18 +64,13 @@ class _ChatMessage {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  // TODO: ضع مفتاح Gemini API الخاص بك هنا.
-  // للحصول على المفتاح: Google AI Studio -> API Key
-  // مثال: const String _apiKey = 'YOUR_KEY';
-  // IMPORTANT: لا تضع المفاتيح داخل كود الإنتاج بدون حماية.
-  static const String _apiKey =
-      'YOUR_GEMINI_API_KEY_HERE';
-
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  ChatSession? _chatSession;
+  GenerativeModel? _model;
 
   final List<_ChatMessage> _messages = [
-    _ChatMessage(
+    const _ChatMessage(
       text:
           'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.',
       isUser: false,
@@ -79,37 +79,49 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    if (_isGeminiApiKeyConfigured()) {
+      final subjectContext = widget.subjectTitle;
+      final systemInstructionText = [
+        'أنت: مساعد تعليمي ذكي للطلاب في تطبيق Smart School.',
+        'المهمة: اشرح بشكل مبسط ومنظم، وقدم أمثلة عند الحاجة.',
+        'اللغة: افترض أن المستخدم يتحدث بالعربية، واستخدم العربية.',
+        if (subjectContext != null && subjectContext.trim().isNotEmpty)
+          'سياق المستخدم: ${subjectContext.trim()}. وجه الإجابة بما يناسب هذا الموضوع.'
+      ].join('\n');
+
+      _model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: _geminiApiKey,
+        systemInstruction: Content.system(systemInstructionText),
+      );
+
+      _chatSession = _model!.startChat(
+        history: [
+          Content.model([
+            TextPart(
+              'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.',
+            )
+          ])
+        ],
+      );
+    }
+  }
+
   Future<String> _generateReply(String userText) async {
-    if (_apiKey.trim().isEmpty || _apiKey == 'PUT_YOUR_GEMINI_API_KEY_HERE') {
-      return 'من فضلك أضف Gemini API Key داخل chat_screen.dart أولاً.';
+    if (!_isGeminiApiKeyConfigured() || _chatSession == null) {
+      return 'لم يُضبط مفتاح Gemini. شغّل التطبيق بـ:\n'
+          'flutter run --dart-define=GEMINI_API_KEY=your_key';
     }
 
-    final model = GenerativeModel(
-      model: 'gemini-1.5-flash',
-      apiKey: _apiKey,
-      // يمكنك إضافة safety settings أو system instructions حسب رغبتك.
-    );
-
-    final subjectContext = widget.subjectTitle;
-    final systemInstruction = [
-      'أنت: مساعد تعليمي ذكي للطلاب في تطبيق Smart School.',
-      'المهمة: اشرح بشكل مبسط ومنظم، وقدم أمثلة عند الحاجة.',
-      'اللغة: افترض أن المستخدم يتحدث بالعربية، واستخدم العربية.',
-      if (subjectContext != null && subjectContext.trim().isNotEmpty)
-        'سياق المستخدم: ${subjectContext.trim()}. وجه الإجابة بما يناسب هذا الموضوع.'
-    ].join('\n');
-
     final prompt = [
-      systemInstruction,
       'سؤال الطالب: $userText',
       'قدّم الإجابة في نقاط مرتبة قدر الإمكان. إذا كان السؤال يتطلب خطوة/حل، ابدأ بالخطوة الأولى ثم التالية.',
     ].join('\n');
 
-    final content = [
-      Content.text(prompt),
-    ];
-
-    final response = await model.generateContent(content);
+    final response = await _chatSession!.sendMessage(Content.text(prompt));
 
     final text = response.text;
     return (text == null || text.trim().isEmpty)
@@ -135,15 +147,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _isLoading = true;
     });
 
-    // Scroll to bottom after adding message
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
-    });
+    _scrollToBottom();
 
     try {
       final reply = await _generateReply(userText);
@@ -162,18 +166,22 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       });
     } finally {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_scrollController.hasClients) return;
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-        );
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _scrollToBottom();
+      }
     }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override

@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io';
-import '../models/user_model.dart';
-import '../models/subject_model.dart';
+import '../data/models/user_model.dart';
 
 class FirebaseService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -36,7 +36,24 @@ class FirebaseService {
         email: email, password: password);
   }
 
+  Future<UserCredential> signInWithGoogle() async {
+    final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) {
+      throw FirebaseAuthException(
+        code: 'ERROR_ABORTED_BY_USER',
+        message: 'Sign in aborted by user',
+      );
+    }
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    final AuthCredential credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    return await _auth.signInWithCredential(credential);
+  }
+
   Future<void> signOut() async {
+    await GoogleSignIn().signOut();
     await _auth.signOut();
   }
 
@@ -72,6 +89,16 @@ class FirebaseService {
     return _db.collection('users').doc(userId).collection('progress').doc(subjectId).snapshots();
   }
 
+  // --- Study Plan ---
+
+  Future<void> saveStudyPlanTask(String userId, String taskId, Map<String, dynamic> data) async {
+    await _db.collection('users').doc(userId).collection('study_plan').doc(taskId).set(data);
+  }
+
+  Stream<QuerySnapshot> getStudyPlanStream(String userId) {
+    return _db.collection('users').doc(userId).collection('study_plan').snapshots();
+  }
+
   // --- Grades ---
 
   Future<void> saveGrade(String userId, String subjectId, double score, double maxScore) async {
@@ -82,5 +109,9 @@ class FirebaseService {
       'maxScore': maxScore,
       'timestamp': FieldValue.serverTimestamp(),
     });
+  }
+
+  Stream<QuerySnapshot> getGradesStream(String userId) {
+    return _db.collection('grades').where('userId', isEqualTo: userId).snapshots();
   }
 }

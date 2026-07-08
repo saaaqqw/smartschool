@@ -4,12 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'locale_notifier.dart';
-import 'l10n/app_localizations.dart';
-import 'screens/welcome_screen.dart';
-import 'screens/main_navigation_screen.dart';
-import 'theme_notifier.dart';
-import 'user_profile_store.dart';
+import 'core/locale/locale_notifier.dart';
+import 'core/l10n/app_localizations.dart';
+import 'screens/auth/welcome_screen.dart';
+import 'screens/shell/main_navigation_screen.dart';
+import 'core/theme/theme_notifier.dart';
+import 'core/stores/user_profile_store.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 Future<void> main() async {

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'dashboard_screen.dart';
-import 'grades_screen.dart';
-import 'plan_screen.dart';
-import 'settings_screen.dart';
-import 'subjects_screen.dart';
+import '../home/dashboard_screen.dart';
+import '../grades/grades_screen.dart';
+import '../study/plan_screen.dart';
+import '../settings/settings_screen.dart';
+import '../subjects/subjects_screen.dart';
 
 /// الحاوية الرئيسية: شريط سفلي + تمرير أفقي بين 5 شاشات.
 ///

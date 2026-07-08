@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../data/subject_curriculum.dart';
+import '../../data/subject_curriculum.dart';
 import 'subject_units_screen.dart';
-import 'chat_screen.dart';
+import '../chat/chat_screen.dart';
 
 /// المواد الدراسية — شبكة من 6 مواد؛ الضغط يفتح شاشة الوحدات الست.
 class SubjectsScreen extends StatelessWidget {

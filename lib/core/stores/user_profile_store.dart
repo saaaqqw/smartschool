@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'services/firebase_service.dart';
-import 'models/user_model.dart';
+import '../../services/firebase_service.dart';
+import '../../data/models/user_model.dart';
 
 /// حقول التسجيل: الاسم الرباعي، المدرسة، الصف، العمر، الجنس.
 class UserProfile {
@@ -79,18 +79,18 @@ class UserProfile {
     );
   }
 
-  static const UserProfile defaults = UserProfile(
+  static const UserProfile empty = UserProfile(
     uid: '',
-    fullName: 'محمد أحمد علي حسن',
-    school: 'مدرسة المستقبل الابتدائية',
-    grade: 'الصف السابع',
-    age: 13,
-    gender: 'ذكر',
+    fullName: '',
+    school: '',
+    grade: '',
+    age: 0,
+    gender: '',
   );
 }
 
 final ValueNotifier<UserProfile> userProfileNotifier =
-    ValueNotifier<UserProfile>(UserProfile.defaults);
+    ValueNotifier<UserProfile>(UserProfile.empty);
 
 const String _kUid = 'profile_uid';
 const String _kFullName = 'profile_full_name';
@@ -98,16 +98,24 @@ const String _kSchool = 'profile_school';
 const String _kGrade = 'profile_grade';
 const String _kAge = 'profile_age';
 const String _kGender = 'profile_gender';
+const String _kProfileImageUrl = 'profile_image_url';
 
 Future<void> loadUserProfile() async {
   final p = await SharedPreferences.getInstance();
+  final uid = p.getString(_kUid) ?? '';
+  if (uid.isEmpty) {
+    userProfileNotifier.value = UserProfile.empty;
+    return;
+  }
+
   userProfileNotifier.value = UserProfile(
-    uid: p.getString(_kUid) ?? UserProfile.defaults.uid,
-    fullName: p.getString(_kFullName) ?? UserProfile.defaults.fullName,
-    school: p.getString(_kSchool) ?? UserProfile.defaults.school,
-    grade: p.getString(_kGrade) ?? UserProfile.defaults.grade,
-    age: p.getInt(_kAge) ?? UserProfile.defaults.age,
-    gender: p.getString(_kGender) ?? UserProfile.defaults.gender,
+    uid: uid,
+    fullName: p.getString(_kFullName) ?? '',
+    school: p.getString(_kSchool) ?? '',
+    grade: p.getString(_kGrade) ?? '',
+    age: p.getInt(_kAge) ?? 0,
+    gender: p.getString(_kGender) ?? '',
+    profileImageUrl: p.getString(_kProfileImageUrl) ?? '',
   );
 }
 
@@ -119,8 +127,8 @@ Future<void> saveUserProfile(UserProfile profile) async {
   await p.setString(_kGrade, profile.grade);
   await p.setInt(_kAge, profile.age);
   await p.setString(_kGender, profile.gender);
-  
-  // Sync with Firebase if UID exists
+  await p.setString(_kProfileImageUrl, profile.profileImageUrl);
+
   if (profile.uid.isNotEmpty) {
     final firebaseService = FirebaseService();
     await firebaseService.saveUserProfile(UserModel(
@@ -133,8 +141,20 @@ Future<void> saveUserProfile(UserProfile profile) async {
       profileImageUrl: profile.profileImageUrl,
     ));
   }
-  
+
   userProfileNotifier.value = profile;
+}
+
+Future<void> clearUserProfile() async {
+  final p = await SharedPreferences.getInstance();
+  await p.remove(_kUid);
+  await p.remove(_kFullName);
+  await p.remove(_kSchool);
+  await p.remove(_kGrade);
+  await p.remove(_kAge);
+  await p.remove(_kGender);
+  await p.remove(_kProfileImageUrl);
+  userProfileNotifier.value = UserProfile.empty;
 }
 
 String firstNameFromFullName(String fullName) {

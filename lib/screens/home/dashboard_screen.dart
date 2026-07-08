@@ -3,16 +3,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import '../user_profile_store.dart';
-import 'grades_screen.dart';
-import 'settings_screen.dart';
-import 'study_plan_screen.dart';
-import 'subjects_screen.dart';
-import 'chat_screen.dart';
+import '../../core/stores/user_profile_store.dart';
+import '../grades/grades_screen.dart';
+import '../settings/settings_screen.dart';
+import '../study/study_plan_screen.dart';
+import '../subjects/subjects_screen.dart';
+import '../chat/chat_screen.dart';
 
-import '../services/firebase_service.dart';
-import '../data/subject_curriculum.dart';
-import '../l10n/app_localizations.dart';
+import '../../data/subject_curriculum.dart';
+import '../../core/l10n/app_localizations.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigateToPage});
@@ -28,8 +27,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final _firebaseService = FirebaseService();
-
   void _openTab(BuildContext context, int index, VoidCallback pushRoute) {
     if (widget.onNavigateToPage != null) {
       widget.onNavigateToPage!(index);
@@ -52,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           builder: (context, profile, _) {
             return StreamBuilder<QuerySnapshot>(
               stream: uid.isEmpty
-                  ? Stream.empty()
+                  ? const Stream.empty()
                   : FirebaseFirestore.instance
                       .collection('users')
                       .doc(uid)
@@ -68,7 +65,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     final unitProgress = data?['unitProgress'] as Map<String, dynamic>? ?? {};
                     if (unitProgress.isNotEmpty) {
                       double subTotal = 0;
-                      unitProgress.values.forEach((v) => subTotal += (v as num).toDouble());
+                      for (final v in unitProgress.values) {
+                      subTotal += (v as num).toDouble();
+                    }
                       totalProgress += (subTotal / 6); // Assuming 6 units per subject
                       count++;
                     }

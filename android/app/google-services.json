@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "662993550710",
-    "project_id": "saqer-b5e7d",
-    "storage_bucket": "saqer-b5e7d.firebasestorage.app"
+    "project_number": "33603645555",
+    "project_id": "saqer1-448ea",
+    "storage_bucket": "saqer1-448ea.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:662993550710:android:bac1abbaca7edf7a014e57",
+        "mobilesdk_app_id": "1:33603645555:android:473ae584c497a4e185ba06",
         "android_client_info": {
           "package_name": "com.example.smart_school1"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "33603645555-5otobb4e60hpcee4kuf31kbs0bv5eelg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyAZrmpoyXpxQesLhwCfwkYpowNNLd7F_FQ"
+          "current_key": "AIzaSyBWJPKtuVV9Sz0slgjQmmvtcIz3Uxmd9uc"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "33603645555-5otobb4e60hpcee4kuf31kbs0bv5eelg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

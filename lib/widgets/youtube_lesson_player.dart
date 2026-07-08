@@ -22,15 +22,14 @@ class YoutubeLessonPlayer extends StatefulWidget {
 
 class _YoutubeLessonPlayerState extends State<YoutubeLessonPlayer> {
   late final YoutubePlayerController _controller;
-  String? _lastVideoId;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _lastVideoId = widget.videoId;
+    final cleanId = YoutubePlayer.convertUrlToId(widget.videoId) ?? widget.videoId;
     _controller = YoutubePlayerController(
-      initialVideoId: widget.videoId,
+      initialVideoId: cleanId,
       flags: YoutubePlayerFlags(
         autoPlay: widget.autoPlay,
         mute: widget.mute,
@@ -52,12 +51,12 @@ class _YoutubeLessonPlayerState extends State<YoutubeLessonPlayer> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoId != widget.videoId) {
       setState(() => _loading = true);
-      _lastVideoId = widget.videoId;
 
       // load() يعالج تغيير الفيديو.
       // نستخدم try/catch لتفادي crash إن كان videoId غير صالح.
       try {
-        _controller.load(widget.videoId);
+        final cleanId = YoutubePlayer.convertUrlToId(widget.videoId) ?? widget.videoId;
+        _controller.load(cleanId);
       } catch (_) {
         // إذا فشل load، سنترك loader يتحول لرسالة خطأ من خلال build.
       }

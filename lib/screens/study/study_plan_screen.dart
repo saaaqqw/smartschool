@@ -1,14 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/firebase_service.dart';
+import '../../core/stores/user_profile_store.dart';
 
 class PlanTask {
   const PlanTask({
+    required this.id,
     required this.title,
     required this.subtitle,
+    required this.completed,
   });
 
+  final String id;
   final String title;
   final String subtitle;
+  final bool completed;
+
+  factory PlanTask.fromMap(String id, Map<String, dynamic> map) {
+    return PlanTask(
+      id: id,
+      title: map['title'] ?? '',
+      subtitle: map['subtitle'] ?? '',
+      completed: map['completed'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'subtitle': subtitle,
+      'completed': completed,
+    };
+  }
 }
 
 /// الخطة الدراسية — قائمة مهام مع اكتمال.
@@ -41,64 +65,94 @@ class StudyPlanScreen extends StatefulWidget {
     );
   }
 
-  static const List<PlanTask> _seed = [
-    PlanTask(
-      title: 'مادة: رياضيات - الوحدة 1',
-      subtitle: 'تمارين الجمع والطرح',
-    ),
-    PlanTask(
-      title: 'مادة: علوم - الوحدة 2',
-      subtitle: 'قراءة الدرس + أسئلة المراجعة',
-    ),
-    PlanTask(
-      title: 'مادة: لغة عربية - النص الأدبي',
-      subtitle: 'حفظ المفردات',
-    ),
-    PlanTask(
-      title: 'مادة: قرآن كريم - سورة الناس',
-      subtitle: 'مراجعة التلاوة',
-    ),
-    PlanTask(
-      title: 'مادة: إنجليزي - Unit 3',
-      subtitle: 'Grammar worksheet',
-    ),
-  ];
-
   @override
   State<StudyPlanScreen> createState() => _StudyPlanScreenState();
 }
 
 class _StudyPlanScreenState extends State<StudyPlanScreen> {
-  late final List<bool> _done;
+  final _firebaseService = FirebaseService();
 
   @override
   void initState() {
     super.initState();
-    _done = List<bool>.filled(StudyPlanScreen._seed.length, false);
-    _done[0] = true;
-    _done[2] = true;
+    _initializePlanIfNeeded();
+  }
+
+  Future<void> _initializePlanIfNeeded() async {
+    final uid = userProfileNotifier.value.uid;
+    if (uid.isEmpty) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('study_plan')
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      final seeds = [
+        {'title': 'مادة: رياضيات - الوحدة 1', 'subtitle': 'تمارين الجمع والطرح', 'completed': true},
+        {'title': 'مادة: علوم - الوحدة 2', 'subtitle': 'قراءة الدرس + أسئلة المراجعة', 'completed': false},
+        {'title': 'مادة: لغة عربية - النص الأدبي', 'subtitle': 'حفظ المفردات', 'completed': true},
+        {'title': 'مادة: قرآن كريم - سورة الناس', 'subtitle': 'مراجعة التلاوة', 'completed': false},
+        {'title': 'مادة: إنجليزي - Unit 3', 'subtitle': 'Grammar worksheet', 'completed': false},
+      ];
+
+      for (int i = 0; i < seeds.length; i++) {
+        await _firebaseService.saveStudyPlanTask(uid, 'task_$i', seeds[i]);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final uid = userProfileNotifier.value.uid;
+
+    if (uid.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('الخطة الدراسية')),
+        body: const Center(child: Text('يرجى تسجيل الدخول أولاً.')),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('الخطة الدراسية'),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        itemCount: StudyPlanScreen._seed.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final task = StudyPlanScreen._seed[index];
-          final completed = _done[index];
-          return _PlanTaskCard(
-            task: task,
-            completed: completed,
-            scheme: scheme,
-            onChanged: (v) => setState(() => _done[index] = v ?? false),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firebaseService.getStudyPlanStream(uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text('لا توجد مهام في خطتك الدراسية حالياً.'));
+          }
+
+          final tasks = snapshot.data!.docs.map((doc) {
+            return PlanTask.fromMap(doc.id, doc.data() as Map<String, dynamic>);
+          }).toList();
+
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            itemCount: tasks.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final task = tasks[index];
+              return _PlanTaskCard(
+                task: task,
+                completed: task.completed,
+                scheme: scheme,
+                onChanged: (v) async {
+                  await _firebaseService.saveStudyPlanTask(uid, task.id, {
+                    'title': task.title,
+                    'subtitle': task.subtitle,
+                    'completed': v ?? false,
+                  });
+                },
+              );
+            },
           );
         },
       ),

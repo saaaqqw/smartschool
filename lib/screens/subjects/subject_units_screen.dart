@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/firebase_service.dart';
-import '../user_profile_store.dart';
-import '../data/subject_curriculum.dart';
+import '../../services/firebase_service.dart';
+import '../../core/stores/user_profile_store.dart';
+import '../../data/subject_curriculum.dart';
 import 'unit_detail_screen.dart';
-import 'chat_screen.dart';
+import '../chat/chat_screen.dart';
 
 class SubjectUnitsScreen extends StatefulWidget {
   const SubjectUnitsScreen({
@@ -61,7 +61,7 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
       backgroundColor: scheme.surfaceContainerLowest,
       body: StreamBuilder<DocumentSnapshot>(
         stream: uid.isEmpty
-            ? Stream.empty()
+            ? const Stream.empty()
             : _firebaseService.getProgressStream(uid, widget.subject.title),
         builder: (context, snapshot) {
           Map<String, dynamic> progressData = {};

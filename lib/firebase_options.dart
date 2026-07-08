@@ -28,27 +28,27 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAZrmpoyXpxQesLhwCfwkYpowNNLd7F_FQ',
-    appId: '1:662993550710:android:bac1abbaca7edf7a014e57',
-    messagingSenderId: '662993550710',
-    projectId: 'saqer-b5e7d',
-    storageBucket: 'saqer-b5e7d.firebasestorage.app',
+    apiKey: 'AIzaSyBWJPKtuVV9Sz0slgjQmmvtcIz3Uxmd9uc',
+    appId: '1:33603645555:android:473ae584c497a4e185ba06',
+    messagingSenderId: '33603645555',
+    projectId: 'saqer1-448ea',
+    storageBucket: 'saqer1-448ea.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAZrmpoyXpxQesLhwCfwkYpowNNLd7F_FQ',
-    appId: '1:662993550710:ios:placeholder', // Placeholder as not in json
-    messagingSenderId: '662993550710',
-    projectId: 'saqer-b5e7d',
-    storageBucket: 'saqer-b5e7d.firebasestorage.app',
+    apiKey: 'AIzaSyBWJPKtuVV9Sz0slgjQmmvtcIz3Uxmd9uc',
+    appId: '1:33603645555:ios:placeholder', // Placeholder as not in json
+    messagingSenderId: '33603645555',
+    projectId: 'saqer1-448ea',
+    storageBucket: 'saqer1-448ea.firebasestorage.app',
     iosBundleId: 'com.example.smart_school1',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAZrmpoyXpxQesLhwCfwkYpowNNLd7F_FQ',
-    appId: '1:662993550710:web:placeholder', // Placeholder
-    messagingSenderId: '662993550710',
-    projectId: 'saqer-b5e7d',
-    storageBucket: 'saqer-b5e7d.firebasestorage.app',
+    apiKey: 'AIzaSyBWJPKtuVV9Sz0slgjQmmvtcIz3Uxmd9uc',
+    appId: '1:33603645555:web:placeholder', // Placeholder
+    messagingSenderId: '33603645555',
+    projectId: 'saqer1-448ea',
+    storageBucket: 'saqer1-448ea.firebasestorage.app',
   );
 }

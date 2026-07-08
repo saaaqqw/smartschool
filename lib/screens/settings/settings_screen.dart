@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import '../locale_notifier.dart';
-import '../theme_notifier.dart';
-import '../user_profile_store.dart';
-import '../services/firebase_service.dart';
-import 'register_screen.dart';
-import 'welcome_screen.dart';
-import '../l10n/app_localizations.dart';
+import '../../core/locale/locale_notifier.dart';
+import '../../core/theme/theme_notifier.dart';
+import '../../core/stores/user_profile_store.dart';
+import '../../services/firebase_service.dart';
+import '../auth/register_screen.dart';
+import '../auth/welcome_screen.dart';
+import '../../core/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const double _kSettingsCardRadius = 20;
 
@@ -48,6 +49,27 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationSettings();
+  }
+
+  Future<void> _loadNotificationSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    });
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notifications_enabled', value);
+    setState(() {
+      _notificationsEnabled = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   label: 'الإشعارات',
                   value: _notificationsEnabled,
                   onChanged: (v) {
-                    setState(() => _notificationsEnabled = v);
+                    _toggleNotifications(v);
                     _toast(context, 'تم تحديث إعدادات الإشعارات');
                   },
                 ),
@@ -484,7 +506,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () async {
                         await updateLocale(const Locale('ar', 'SA'));
                         if (ctx.mounted) Navigator.pop(ctx);
-                        _toast(parentContext, 'تم اختيار العربية');
+                        if (parentContext.mounted) {
+                          _toast(parentContext, 'تم اختيار العربية');
+                        }
                       },
                     ),
                     ListTile(
@@ -500,7 +524,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () async {
                         await updateLocale(const Locale('en', 'US'));
                         if (ctx.mounted) Navigator.pop(ctx);
-                        _toast(parentContext, 'English selected');
+                        if (parentContext.mounted) {
+                          _toast(parentContext, 'English selected');
+                        }
                       },
                     ),
                   ],
@@ -534,6 +560,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           FilledButton(
             onPressed: () async {
               await FirebaseService().signOut();
+              await clearUserProfile();
               if (ctx.mounted) {
                 Navigator.of(ctx).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const WelcomeScreen()),

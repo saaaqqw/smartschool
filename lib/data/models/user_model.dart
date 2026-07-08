@@ -54,6 +54,7 @@ class UserModel {
     String? grade,
     int? age,
     String? gender,
+    String? profileImageUrl,
     DateTime? createdAt,
   }) {
     return UserModel(
@@ -63,6 +64,7 @@ class UserModel {
       grade: grade ?? this.grade,
       age: age ?? this.age,
       gender: gender ?? this.gender,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       createdAt: createdAt ?? this.createdAt,
     );
   }

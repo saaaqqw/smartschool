@@ -1,23 +1,39 @@
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import '../user_profile_store.dart';
-import '../services/firebase_service.dart';
-import '../models/user_model.dart';
-import 'main_navigation_screen.dart';
+import '../../core/stores/user_profile_store.dart';
+import '../../services/firebase_service.dart';
+import '../shell/main_navigation_screen.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key, this.isEditMode = false});
+  const RegisterScreen({
+    super.key,
+    this.isEditMode = false,
+    this.initialEmail,
+    this.initialPassword,
+  });
 
   final bool isEditMode;
+  final String? initialEmail;
+  final String? initialPassword;
 
-  static Route<void> route({bool isEditMode = false}) {
+  static Route<void> route({
+    bool isEditMode = false,
+    String? email,
+    String? password,
+  }) {
     return PageRouteBuilder<void>(
       pageBuilder: (context, animation, secondaryAnimation) =>
-          RegisterScreen(isEditMode: isEditMode),
+          RegisterScreen(
+            isEditMode: isEditMode,
+            initialEmail: email,
+            initialPassword: password,
+          ),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: CurvedAnimation(
@@ -69,6 +85,7 @@ String _coerceGender(String saved) {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _fullNameController;
   late final TextEditingController _schoolController;
   late final TextEditingController _ageController;
@@ -102,8 +119,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _fullNameController = TextEditingController();
       _schoolController = TextEditingController();
       _ageController = TextEditingController();
-      _emailController = TextEditingController();
-      _passwordController = TextEditingController();
+      _emailController = TextEditingController(text: widget.initialEmail);
+      _passwordController = TextEditingController(text: widget.initialPassword);
       _selectedGrade = RegisterScreen.gradeOptions.first;
       _gender = RegisterScreen.genderOptions.first;
     }
@@ -135,46 +152,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
-    final age = int.tryParse(_ageController.text.trim());
-    if (age == null || age < 1 || age > 120) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('يرجى إدخال عمر صحيح', style: GoogleFonts.tajawal())),
-      );
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
+
+    final age = int.parse(_ageController.text.trim());
     final fullName = _fullNameController.text.trim();
     final school = _schoolController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (fullName.isEmpty || school.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('يرجى تعبئة الاسم الرباعي واسم المدرسة', style: GoogleFonts.tajawal())),
-      );
-      return;
-    }
-
-    if (!widget.isEditMode && (email.isEmpty || password.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('يرجى إدخال البريد الإلكتروني وكلمة المرور لإنشاء الحساب', style: GoogleFonts.tajawal())),
-      );
-      return;
-    }
-
     setState(() => _isLoading = true);
 
+    User? createdUser;
     try {
       final firebaseService = FirebaseService();
       String uid = userProfileNotifier.value.uid;
 
       if (!widget.isEditMode) {
         final creds = await firebaseService.signUpWithEmailAndPassword(email, password);
-        uid = creds.user?.uid ?? '';
+        createdUser = creds.user;
+        uid = createdUser?.uid ?? '';
       }
 
       String profileImageUrl = userProfileNotifier.value.profileImageUrl;
       if (_imageFile != null) {
-        profileImageUrl = await firebaseService.uploadProfileImage(uid, _imageFile!);
+        try {
+          profileImageUrl = await firebaseService.uploadProfileImage(uid, _imageFile!);
+        } catch (e) {
+          debugPrint('Error uploading profile image: $e');
+        }
       }
 
       final profile = UserProfile(
@@ -187,7 +192,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         profileImageUrl: profileImageUrl,
       );
 
-      await saveUserProfile(profile);
+      try {
+        await saveUserProfile(profile);
+      } catch (firestoreError) {
+        if (!widget.isEditMode && createdUser != null) {
+          await createdUser.delete();
+        }
+        rethrow;
+      }
 
       if (!mounted) return;
 
@@ -229,6 +241,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_fieldRadius),
         borderSide: BorderSide(color: scheme.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_fieldRadius),
+        borderSide: BorderSide(color: scheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_fieldRadius),
+        borderSide: BorderSide(color: scheme.error, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
@@ -293,19 +313,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
             style: GoogleFonts.tajawal(fontSize: 15, fontWeight: FontWeight.w600, color: scheme.onSurface),
           ),
         ),
-        Row(
-          children: RegisterScreen.genderOptions.map((g) {
-            return Expanded(
-              child: RadioListTile<String>(
-                value: g,
-                groupValue: _gender,
-                title: Text(g, style: GoogleFonts.tajawal(fontSize: 16)),
-                onChanged: (v) { if (v != null) setState(() => _gender = v); },
-                contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-              ),
-            );
-          }).toList(),
+        RadioGroup<String>(
+          groupValue: _gender,
+          onChanged: (v) { if (v != null) setState(() => _gender = v); },
+          child: Row(
+            children: RegisterScreen.genderOptions.map((g) {
+              return Expanded(
+                child: RadioListTile<String>(
+                  value: g,
+                  title: Text(g, style: GoogleFonts.tajawal(fontSize: 16)),
+                  contentPadding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
@@ -329,89 +351,135 @@ class _RegisterScreenState extends State<RegisterScreen> {
               )
             : null,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
-        children: [
-          _buildAvatar(scheme),
-          const SizedBox(height: 32),
-          TextField(
-            controller: _fullNameController,
-            decoration: _fieldDecoration(scheme, label: 'الاسم الرباعي', prefix: const Icon(Icons.person_outline_rounded)),
-            style: GoogleFonts.tajawal(fontSize: 16),
-          ),
-          if (!widget.isEditMode) ...[
-            const SizedBox(height: 16),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _fieldDecoration(scheme, label: 'البريد الإلكتروني', prefix: const Icon(Icons.email_outlined)),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
+          children: [
+            _buildAvatar(scheme),
+            const SizedBox(height: 32),
+            TextFormField(
+              controller: _fullNameController,
+              decoration: _fieldDecoration(scheme, label: 'الاسم الرباعي', prefix: const Icon(Icons.person_outline_rounded)),
               style: GoogleFonts.tajawal(fontSize: 16),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'يرجى إدخال الاسم الرباعي';
+                if (v.trim().split(RegExp(r'\s+')).length < 4) return 'يرجى كتابة الاسم رباعياً كما هو مطلوب';
+                return null;
+              },
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              decoration: _fieldDecoration(
-                scheme,
-                label: 'كلمة المرور',
-                prefix: const Icon(Icons.password_rounded),
-                suffix: IconButton(
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
-                ),
+            if (!widget.isEditMode) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: _fieldDecoration(scheme, label: 'البريد الإلكتروني', prefix: const Icon(Icons.email_outlined)),
+                style: GoogleFonts.tajawal(fontSize: 16),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'يرجى إدخال البريد الإلكتروني';
+                  final regex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+                  if (!regex.hasMatch(v.trim())) return 'يرجى إدخال بريد إلكتروني صحيح';
+                  return null;
+                },
               ),
-              style: GoogleFonts.tajawal(fontSize: 16),
-            ),
-          ],
-          const SizedBox(height: 16),
-          TextField(
-            controller: _schoolController,
-            decoration: _fieldDecoration(scheme, label: 'المدرسة', prefix: const Icon(Icons.school_outlined)),
-            style: GoogleFonts.tajawal(fontSize: 16),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  value: _selectedGrade,
-                  decoration: _fieldDecoration(scheme, label: 'الصف'),
-                  items: RegisterScreen.gradeOptions
-                      .map((g) => DropdownMenuItem(value: g, child: Text(g, style: GoogleFonts.tajawal())))
-                      .toList(),
-                  onChanged: (v) { if (v != null) setState(() => _selectedGrade = v); },
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                decoration: _fieldDecoration(
+                  scheme,
+                  label: 'كلمة المرور',
+                  prefix: const Icon(Icons.password_rounded),
+                  suffix: IconButton(
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: TextField(
-                  controller: _ageController,
-                  keyboardType: TextInputType.number,
-                  decoration: _fieldDecoration(scheme, label: 'العمر'),
-                  style: GoogleFonts.tajawal(fontSize: 16),
-                ),
+                style: GoogleFonts.tajawal(fontSize: 16),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'يرجى إدخال كلمة المرور';
+                  if (v.trim().length < 6) return 'يجب أن لا تقل كلمة المرور عن 6 خانات';
+                  return null;
+                },
               ),
             ],
-          ),
-          const SizedBox(height: 24),
-          _genderRadios(scheme),
-          const SizedBox(height: 32),
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator())
-          else
-            FilledButton(
-              onPressed: _submit,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(56),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_fieldRadius)),
-              ),
-              child: Text(
-                widget.isEditMode ? 'حفظ التعديلات' : 'إنشاء الحساب والمتابعة',
-                style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _schoolController,
+              decoration: _fieldDecoration(scheme, label: 'المدرسة', prefix: const Icon(Icons.school_outlined)),
+              style: GoogleFonts.tajawal(fontSize: 16),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'يرجى إدخال اسم المدرسة';
+                return null;
+              },
             ),
-        ],
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedGrade,
+                    decoration: _fieldDecoration(scheme, label: 'الصف'),
+                    items: RegisterScreen.gradeOptions
+                        .map((g) => DropdownMenuItem(value: g, child: Text(g, style: GoogleFonts.tajawal())))
+                        .toList(),
+                    onChanged: (v) { if (v != null) setState(() => _selectedGrade = v); },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    controller: _ageController,
+                    keyboardType: TextInputType.number,
+                    decoration: _fieldDecoration(scheme, label: 'العمر'),
+                    style: GoogleFonts.tajawal(fontSize: 16),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'يرجى إدخال العمر';
+                      final age = int.tryParse(v.trim());
+                      if (age == null || age < 5 || age > 25) return 'عمر غير منطقي';
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _genderRadios(scheme),
+            const SizedBox(height: 32),
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else ...[
+              FilledButton(
+                onPressed: _submit,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_fieldRadius)),
+                ),
+                child: Text(
+                  widget.isEditMode ? 'حفظ التعديلات' : 'إنشاء الحساب والمتابعة',
+                  style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (!widget.isEditMode) ...[
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacement(LoginScreen.route());
+                  },
+                  child: Text(
+                    'لديك حساب بالفعل؟ تسجيل الدخول',
+                    style: GoogleFonts.tajawal(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
       ),
     );
   }
