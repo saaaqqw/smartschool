@@ -89,6 +89,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final apiKey = await AiConfigService.getApiKey();
+      if (apiKey.isEmpty) {
+        return '⚠️ عذراً، لم يتم إعداد مفتاح الذكاء الاصطناعي في قاعدة البيانات بعد. يرجى من مسؤول النظام إضافة المفتاح (apiKey) في Firestore في المسار (settings/ai_config).';
+      }
       final modelName = await AiConfigService.getModelName();
       final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
       final headers = {

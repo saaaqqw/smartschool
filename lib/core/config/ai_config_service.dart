@@ -8,15 +8,12 @@ import 'package:flutter/foundation.dart';
 /// ──────────────────────────────────────────────────────────────
 class AiConfigService {
   static final _db = FirebaseFirestore.instance;
-  static const String _partA = 'gsk_j4RU7DTQBCnG8LqZSu9wWGdyb3';
-  static const String _partB = 'FYar2QFM8crlW4YaVCXNVk7vnW';
-  static String get _defaultApiKey => _partA + _partB;
   static const String _defaultModel = 'llama-3.3-70b-versatile';
 
   static String? _cachedApiKey;
   static String? _cachedModel;
 
-  /// جلب مفتاح Groq API المفعل حالياً (سواء من السحابة أو الاحتياطي)
+  /// جلب مفتاح Groq API المفعل حالياً ديناميكياً من Firestore فقط
   static Future<String> getApiKey() async {
     if (_cachedApiKey != null && _cachedApiKey!.isNotEmpty) {
       return _cachedApiKey!;
@@ -31,10 +28,9 @@ class AiConfigService {
         }
       }
     } catch (e) {
-      debugPrint('⚠️ [AiConfigService] تنبيه: تعذر سحب إعدادات الذكاء الاصطناعي من السحابة، يتم استخدام المفتاح الحالي: $e');
+      debugPrint('⚠️ [AiConfigService] تنبيه: تعذر سحب إعدادات الذكاء الاصطناعي من السحابة: $e');
     }
-    _cachedApiKey = _defaultApiKey;
-    return _cachedApiKey!;
+    return '';
   }
 
   /// جلب اسم نموذج الذكاء الاصطناعي المفعل حالياً
