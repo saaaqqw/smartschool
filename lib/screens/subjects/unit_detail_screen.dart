@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/firebase_service.dart';
+import '../../services/firebase_sync_service.dart';
+import '../../services/lesson_service.dart';
+import '../../data/models/lesson_model.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../../data/subject_curriculum.dart';
 import '../chat/chat_screen.dart';
@@ -50,6 +53,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
 
   Future<void> _markAsComplete() async {
     final uid = userProfileNotifier.value.uid;
+    final semester = userProfileNotifier.value.semester;
     if (uid.isEmpty) return;
 
     setState(() => _isUpdating = true);
@@ -59,6 +63,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
         widget.subject.title,
         widget.unit.title,
         1.0,
+        semester: semester,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -94,7 +99,9 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
     required String videoId,
     required String subjectDocId,
     required int unitIndex,
+    double lessonGrade = 0.0,
   }) {
+    final pctScore = (lessonGrade > 1 ? lessonGrade : lessonGrade * 100).round();
     return Card(
       elevation: 0,
       color: widget.subject.color.withValues(alpha: 0.08),
@@ -123,13 +130,35 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
             color: scheme.onSurface,
           ),
         ),
-        subtitle: Text(
-          'شاهد الدرس + حدده كمكتمل',
-          style: GoogleFonts.tajawal(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurfaceVariant,
-          ),
+        subtitle: Row(
+          children: [
+            Text(
+              'شاهد الدرس + حدده كمكتمل',
+              style: GoogleFonts.tajawal(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            if (lessonGrade > 0) ...[
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: widget.subject.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'الدرجة: $pctScore%',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: widget.subject.color,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         trailing: Column(
           mainAxisSize: MainAxisSize.min,
@@ -177,7 +206,12 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
     final uid = userProfileNotifier.value.uid;
     final grade = userProfileNotifier.value.grade;
     final cleanGrade = grade.isEmpty ? 'الصف السابع' : grade;
-    final subjectDocId = '${widget.subject.title} - $cleanGrade';
+    final semester = userProfileNotifier.value.semester;
+    final subjectDocId = FirebaseSyncService.getSubjectDocId(
+      widget.subject.title,
+      cleanGrade,
+      semester: semester,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -189,7 +223,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
       body: StreamBuilder<DocumentSnapshot>(
         stream: uid.isEmpty
             ? const Stream.empty()
-            : _firebaseService.getProgressStream(uid, widget.subject.title),
+            : _firebaseService.getProgressStream(uid, widget.subject.title, semester: semester),
         builder: (context, snapshot) {
           double progress = widget.unit.progress;
           if (snapshot.hasData && snapshot.data!.exists) {
@@ -202,29 +236,13 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
           }
           final pct = (progress * 100).round();
 
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance
-                .collection('subjects')
-                .doc(subjectDocId)
-                .get(),
-            builder: (context, subjectSnapshot) {
-              List<Map<String, String>> lessonsList = [];
-              if (subjectSnapshot.hasData && subjectSnapshot.data!.exists) {
-                final data = subjectSnapshot.data!.data() as Map<String, dynamic>?;
-                final unitsList = data?['units'] as List? ?? [];
-                if (widget.unitIndex >= 0 && widget.unitIndex < unitsList.length) {
-                  final unitData = unitsList[widget.unitIndex] as Map<String, dynamic>? ?? {};
-                  final lessons = unitData['lessons'] as List? ?? [];
-                  lessonsList = lessons.map((l) {
-                    final lessonMap = l as Map<String, dynamic>? ?? {};
-                    return {
-                      'title': (lessonMap['title'] ?? '').toString(),
-                      'videoUrl': (lessonMap['videoUrl'] ?? '').toString(),
-                    };
-                  }).toList();
-                }
-              }
-
+          return StreamBuilder<List<LessonModel>>(
+            stream: LessonService().lessonsStream(
+              subjectId: subjectDocId,
+              unitIndex: widget.unitIndex,
+            ),
+            builder: (context, lessonsSnapshot) {
+              final lessonsList = lessonsSnapshot.data ?? [];
               final showPlaceholder = lessonsList.isEmpty;
 
               return ListView(
@@ -357,14 +375,16 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                         videoId: videoId,
                         subjectDocId: subjectDocId,
                         unitIndex: widget.unitIndex,
+                        lessonGrade: 0.0,
                       );
                     })
                   else
                     ...List.generate(lessonsList.length, (i) {
                       final lesson = lessonsList[i];
-                      final lessonNumber = i + 1;
-                      final lessonTitle = lesson['title'] ?? 'الدرس $lessonNumber';
-                      final videoId = lesson['videoUrl'] ?? 'dQw4w9WgXcQ';
+                      final lessonNumber = lesson.lessonNumber;
+                      final lessonTitle = lesson.title.isNotEmpty ? lesson.title : 'الدرس $lessonNumber';
+                      final videoId = lesson.videoUrl;
+                      final lessonGrade = lesson.lessonGrade;
                       return _buildLessonCard(
                         context: context,
                         scheme: scheme,
@@ -373,6 +393,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                         videoId: videoId.isEmpty ? 'dQw4w9WgXcQ' : videoId,
                         subjectDocId: subjectDocId,
                         unitIndex: widget.unitIndex,
+                        lessonGrade: lessonGrade,
                       );
                     }),
                 ],

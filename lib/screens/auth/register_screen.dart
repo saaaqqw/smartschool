@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/stores/user_profile_store.dart';
 import '../../services/firebase_service.dart';
+import '../../services/firebase_sync_service.dart';
 import '../shell/main_navigation_screen.dart';
 import 'login_screen.dart';
 
@@ -90,14 +91,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late final TextEditingController _schoolController;
   late final TextEditingController _ageController;
   late final TextEditingController _emailController;
-  late final TextEditingController _passwordController;
   late String _selectedGrade;
   late String _gender;
 
   final _picker = ImagePicker();
   File? _imageFile;
   bool _isLoading = false;
-  bool _obscurePassword = true;
 
   static const double _fieldRadius = 16;
 
@@ -111,16 +110,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _ageController = TextEditingController(
         text: p.age > 0 ? p.age.toString() : '',
       );
-      _emailController = TextEditingController();
-      _passwordController = TextEditingController();
+      _emailController = TextEditingController(text: p.email);
       _selectedGrade = _coerceGrade(p.grade);
       _gender = _coerceGender(p.gender);
     } else {
       _fullNameController = TextEditingController();
       _schoolController = TextEditingController();
       _ageController = TextEditingController();
-      _emailController = TextEditingController(text: widget.initialEmail);
-      _passwordController = TextEditingController(text: widget.initialPassword);
+      final currentAuthUser = FirebaseAuth.instance.currentUser;
+      final autoEmail = widget.initialEmail ?? currentAuthUser?.email ?? '';
+      _emailController = TextEditingController(text: autoEmail);
       _selectedGrade = RegisterScreen.gradeOptions.first;
       _gender = RegisterScreen.genderOptions.first;
     }
@@ -132,7 +131,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _schoolController.dispose();
     _ageController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -158,7 +156,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final fullName = _fullNameController.text.trim();
     final school = _schoolController.text.trim();
     final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
 
     setState(() => _isLoading = true);
 
@@ -168,9 +165,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       String uid = userProfileNotifier.value.uid;
 
       if (!widget.isEditMode) {
-        final creds = await firebaseService.signUpWithEmailAndPassword(email, password);
-        createdUser = creds.user;
-        uid = createdUser?.uid ?? '';
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          createdUser = currentUser;
+          uid = createdUser.uid;
+        } else {
+          // إذا لم يكن هناك مستخدم مسجل الدخول، يتم إنشاء حساب بكلمة مرور عشوائية أو مجهول
+          final creds = await firebaseService.signUpWithEmailAndPassword(
+            email,
+            'Pass_${DateTime.now().millisecondsSinceEpoch}',
+          );
+          createdUser = creds.user;
+          uid = createdUser?.uid ?? '';
+        }
       }
 
       String profileImageUrl = userProfileNotifier.value.profileImageUrl;
@@ -206,6 +213,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (widget.isEditMode) {
         Navigator.of(context).pop();
       } else {
+        // ── تهيئة Firebase لمستخدم جديد ──────────────────────────────
+        FirebaseSyncService.initializeAllSubjects().ignore();
+        FirebaseSyncService.initializeUserProgress(uid).ignore();
+
         Navigator.of(context).pushAndRemoveUntil<void>(
           MaterialPageRoute<void>(builder: (context) => const MainNavigationScreen()),
           (route) => false,
@@ -368,41 +379,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 return null;
               },
             ),
-            if (!widget.isEditMode) ...[
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: _fieldDecoration(scheme, label: 'البريد الإلكتروني', prefix: const Icon(Icons.email_outlined)),
-                style: GoogleFonts.tajawal(fontSize: 16),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'يرجى إدخال البريد الإلكتروني';
-                  final regex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                  if (!regex.hasMatch(v.trim())) return 'يرجى إدخال بريد إلكتروني صحيح';
-                  return null;
-                },
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _emailController,
+              readOnly: _emailController.text.isNotEmpty,
+              keyboardType: TextInputType.emailAddress,
+              decoration: _fieldDecoration(
+                scheme,
+                label: 'البريد الإلكتروني (مؤكد تلقائياً)',
+                prefix: const Icon(Icons.mark_email_read_rounded, color: Colors.green),
+                suffix: _emailController.text.isNotEmpty
+                    ? const Icon(Icons.verified_rounded, color: Colors.green)
+                    : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: _fieldDecoration(
-                  scheme,
-                  label: 'كلمة المرور',
-                  prefix: const Icon(Icons.password_rounded),
-                  suffix: IconButton(
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
-                  ),
-                ),
-                style: GoogleFonts.tajawal(fontSize: 16),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'يرجى إدخال كلمة المرور';
-                  if (v.trim().length < 6) return 'يجب أن لا تقل كلمة المرور عن 6 خانات';
-                  return null;
-                },
-              ),
-            ],
+              style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.bold),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'يرجى إدخال البريد الإلكتروني';
+                final regex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+                if (!regex.hasMatch(v.trim())) return 'يرجى إدخال بريد إلكتروني صحيح';
+                return null;
+              },
+            ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _schoolController,

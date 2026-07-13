@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../home/dashboard_screen.dart';
@@ -54,6 +55,63 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
+  Future<bool?> _showExitConfirmationDialog(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: scheme.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Text(
+            'تأكيد الخروج',
+            style: GoogleFonts.tajawal(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          content: Text(
+            'هل أنت متأكد من الخروج من التطبيق؟',
+            style: GoogleFonts.tajawal(
+              fontSize: 15,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'لا',
+                style: GoogleFonts.tajawal(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.primary,
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'نعم',
+                style: GoogleFonts.tajawal(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -67,57 +125,67 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const SettingsScreen(),
     ];
 
-    return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        reverse: false,
-        onPageChanged: _onPageChanged,
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldExit = await _showExitConfirmationDialog(context);
+        if (shouldExit == true) {
+          await SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        body: PageView(
+          controller: _pageController,
+          reverse: false,
+          onPageChanged: _onPageChanged,
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          children: pages,
         ),
-        children: pages,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _currentIndex,
-        selectedItemColor: scheme.primary,
-        unselectedItemColor: scheme.onSurfaceVariant,
-        selectedLabelStyle: GoogleFonts.tajawal(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _currentIndex,
+          selectedItemColor: scheme.primary,
+          unselectedItemColor: scheme.onSurfaceVariant,
+          selectedLabelStyle: GoogleFonts.tajawal(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+          unselectedLabelStyle: GoogleFonts.tajawal(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+          onTap: _goToPage,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_rounded),
+              activeIcon: Icon(Icons.home_rounded, size: 28),
+              label: 'الرئيسية',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.menu_book_rounded),
+              activeIcon: Icon(Icons.menu_book_rounded, size: 28),
+              label: 'المواد',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.event_note_rounded),
+              activeIcon: Icon(Icons.event_note_rounded, size: 28),
+              label: 'الخطة',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.bar_chart_rounded),
+              activeIcon: Icon(Icons.bar_chart_rounded, size: 28),
+              label: 'الدرجات',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_rounded),
+              activeIcon: Icon(Icons.settings_rounded, size: 28),
+              label: 'الإعدادات',
+            ),
+          ],
         ),
-        unselectedLabelStyle: GoogleFonts.tajawal(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-        ),
-        onTap: _goToPage,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_rounded),
-            activeIcon: Icon(Icons.home_rounded, size: 28),
-            label: 'الرئيسية',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.menu_book_rounded),
-            activeIcon: Icon(Icons.menu_book_rounded, size: 28),
-            label: 'المواد',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.event_note_rounded),
-            activeIcon: Icon(Icons.event_note_rounded, size: 28),
-            label: 'الخطة',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_rounded),
-            activeIcon: Icon(Icons.bar_chart_rounded, size: 28),
-            label: 'الدرجات',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded),
-            activeIcon: Icon(Icons.settings_rounded, size: 28),
-            label: 'الإعدادات',
-          ),
-        ],
       ),
     );
   }

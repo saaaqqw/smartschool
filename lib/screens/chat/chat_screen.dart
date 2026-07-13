@@ -1,17 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
+import '../../core/config/ai_config_service.dart';
 
-// Run: flutter run --dart-define=GEMINI_API_KEY=your_key_here
-const String _geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
-
-bool _isGeminiApiKeyConfigured() =>
-    _geminiApiKey.isNotEmpty && _geminiApiKey != 'PUT_YOUR_GEMINI_API_KEY_HERE';
-
-/// Chat bot screen using Google Gemini (google_generative_ai).
+/// Chat bot screen using Groq Llama3 model.
 ///
 /// - UI: modern chat bubbles (blue/white)
-/// - Logic: Gemini 1.5 Flash acting as an educational assistant for students
+/// - Logic: Llama3-70b-8192 acting as an educational assistant for students
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -66,8 +62,6 @@ class _ChatMessage {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  ChatSession? _chatSession;
-  GenerativeModel? _model;
 
   final List<_ChatMessage> _messages = [
     const _ChatMessage(
@@ -82,51 +76,54 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    if (_isGeminiApiKeyConfigured()) {
-      final subjectContext = widget.subjectTitle;
-      final systemInstructionText = [
-        'أنت: مساعد تعليمي ذكي للطلاب في تطبيق Smart School.',
-        'المهمة: اشرح بشكل مبسط ومنظم، وقدم أمثلة عند الحاجة.',
-        'اللغة: افترض أن المستخدم يتحدث بالعربية، واستخدم العربية.',
-        if (subjectContext != null && subjectContext.trim().isNotEmpty)
-          'سياق المستخدم: ${subjectContext.trim()}. وجه الإجابة بما يناسب هذا الموضوع.'
-      ].join('\n');
-
-      _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: _geminiApiKey,
-        systemInstruction: Content.system(systemInstructionText),
-      );
-
-      _chatSession = _model!.startChat(
-        history: [
-          Content.model([
-            TextPart(
-              'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.',
-            )
-          ])
-        ],
-      );
-    }
   }
 
   Future<String> _generateReply(String userText) async {
-    if (!_isGeminiApiKeyConfigured() || _chatSession == null) {
-      return 'لم يُضبط مفتاح Gemini. شغّل التطبيق بـ:\n'
-          'flutter run --dart-define=GEMINI_API_KEY=your_key';
-    }
-
     final prompt = [
+      'أنت مساعد تعليمي ذكي للطلاب في تطبيق Smart School. اشرح لي دائماً باللغة العربية بشكل مبسط ومنظم.',
+      if (widget.subjectTitle != null && widget.subjectTitle!.trim().isNotEmpty)
+        'سياق دراستي الحالي هو: ${widget.subjectTitle!.trim()}. وجه إجاباتك بما يناسب هذا الموضوع.',
       'سؤال الطالب: $userText',
       'قدّم الإجابة في نقاط مرتبة قدر الإمكان. إذا كان السؤال يتطلب خطوة/حل، ابدأ بالخطوة الأولى ثم التالية.',
     ].join('\n');
 
-    final response = await _chatSession!.sendMessage(Content.text(prompt));
+    try {
+      final apiKey = await AiConfigService.getApiKey();
+      final modelName = await AiConfigService.getModelName();
+      final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+      final headers = {
+        'Authorization': 'Bearer $apiKey',
+        'Content-Type': 'application/json',
+      };
 
-    final text = response.text;
-    return (text == null || text.trim().isEmpty)
-        ? 'لم أستطع الحصول على رد حالياً، حاول مرة أخرى.'
-        : text.trim();
+      final body = {
+        'model': modelName,
+        'messages': [
+          {
+            'role': 'user',
+            'content': prompt,
+          }
+        ],
+        'temperature': 0.7,
+      };
+
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final content = decoded['choices'][0]['message']['content'] as String;
+        return content.trim();
+      } else {
+        debugPrint('Groq API Error: ${response.statusCode} - ${response.body}');
+        return 'عذراً، فشل الحصول على رد حالياً. رمز الخطأ: ${response.statusCode}';
+      }
+    } catch (e) {
+      return 'حدث خطأ أثناء الاتصال بالخادم: $e';
+    }
   }
 
   @override

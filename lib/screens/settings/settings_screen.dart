@@ -8,8 +8,12 @@ import '../../core/stores/user_profile_store.dart';
 import '../../services/firebase_service.dart';
 import '../auth/register_screen.dart';
 import '../auth/welcome_screen.dart';
+import '../study/study_plan_screen.dart';
 import '../../core/l10n/app_localizations.dart';
+import 'developer_dashboard_screen.dart';
+import '../reports/parent_report_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/config/developer_auth_service.dart';
 
 const double _kSettingsCardRadius = 20;
 
@@ -153,6 +157,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   scheme: scheme,
                   onTap: () => _showLanguageSheet(context),
                 ),
+                _divider(scheme),
+                _ChevronTile(
+                  icon: Icons.event_note_rounded,
+                  label: 'الخطة الدراسية',
+                  onTap: () {
+                    Navigator.of(context).push(StudyPlanScreen.route());
+                  },
+                ),
+                _divider(scheme),
+                _ChevronTile(
+                  icon: Icons.analytics_rounded,
+                  label: 'تقارير ولي الأمر والأداء الأكاديمي 📊',
+                  onTap: () {
+                    Navigator.of(context).push(ParentReportScreen.route());
+                  },
+                ),
               ],
             ),
           ),
@@ -188,15 +208,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _divider(scheme),
                 _ChevronTile(
-                  icon: Icons.group_outlined,
+                  icon: Icons.developer_mode_rounded,
                   label: AppLocalizations.of(context).translate('team'),
-                  onTap: () => _showM3InfoDialog(
-                    context,
-                    icon: Icons.group_outlined,
-                    title: 'فريق العمل',
-                    body:
-                        'تم تطوير هذا التطبيق بواسطة المهندس محمد سعيد (طالب علوم حاسوب - مستوى رابع) لخدمة طلاب المرحلة المتوسطة.',
-                  ),
+                  onTap: () => _showDeveloperPinDialog(context),
                 ),
               ],
             ),
@@ -241,6 +255,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
+  // تمت إزالة منطق الخطة والجدول الأسبوعي من هنا ونقله إلى StudyPlanScreen.
 
   Widget _buildProfileHeader(BuildContext context, ColorScheme scheme) {
     final profile = userProfileNotifier.value;
@@ -306,11 +322,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ValueListenableBuilder<UserProfile>(
           valueListenable: userProfileNotifier,
           builder: (context, profile, _) {
+            final gradeText = profile.grade.isNotEmpty ? profile.grade : 'الصف السابع';
             return Column(
               children: [
                 Text(
                   profile.fullName.trim().isEmpty
-                      ? 'طالب'
+                      ? 'طالب Smart School'
                       : profile.fullName,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.tajawal(
@@ -322,12 +339,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'طالب علوم حاسوب',
+                  '$gradeText ${profile.age > 0 ? "• (${profile.age} سنة)" : ""}',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.tajawal(
                     fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.primary,
+                  ),
+                ),
+                if (profile.email.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.email_outlined, size: 14, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        profile.email,
+                        style: GoogleFonts.tajawal(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    RegisterScreen.route(isEditMode: true),
+                  ),
+                  icon: const Icon(Icons.edit_rounded, size: 16),
+                  label: Text(
+                    'تعديل البيانات الشخصية والرمز',
+                    style: GoogleFonts.tajawal(fontSize: 13.5, fontWeight: FontWeight.w700),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ],
@@ -537,6 +587,127 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
     );
+  }
+
+  void _showDeveloperPinDialog(BuildContext context) {
+    final pinController = TextEditingController();
+    final errorNotifier = ValueNotifier<String>('');
+    final obscureNotifier = ValueNotifier<bool>(true);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(Icons.admin_panel_settings_rounded, color: Theme.of(context).colorScheme.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'حماية شاشة المطور',
+                style: GoogleFonts.tajawal(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'هذه المنطقة مخصصة لإدارة المواد والأسئلة. يرجى إدخال رمز الأمان للمتابعة:',
+              style: GoogleFonts.tajawal(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            ValueListenableBuilder<bool>(
+              valueListenable: obscureNotifier,
+              builder: (context, obscure, _) {
+                return TextField(
+                  controller: pinController,
+                  obscureText: obscure,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'رمز أمان المطور (PIN)',
+                    labelStyle: GoogleFonts.tajawal(),
+                    prefixIcon: const Icon(Icons.lock_rounded),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                      onPressed: () => obscureNotifier.value = !obscure,
+                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  style: GoogleFonts.tajawal(fontSize: 18, letterSpacing: 4, fontWeight: FontWeight.bold),
+                  onSubmitted: (_) => _verifyAndEnterDeveloper(ctx, pinController.text, errorNotifier),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            ValueListenableBuilder<String>(
+              valueListenable: errorNotifier,
+              builder: (context, errorText, _) {
+                if (errorText.isEmpty) return const SizedBox.shrink();
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Colors.red, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          errorText,
+                          style: GoogleFonts.tajawal(color: Colors.red.shade700, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('إلغاء', style: GoogleFonts.tajawal(fontWeight: FontWeight.w600)),
+          ),
+          FilledButton.icon(
+            onPressed: () => _verifyAndEnterDeveloper(ctx, pinController.text, errorNotifier),
+            icon: const Icon(Icons.login_rounded, size: 18),
+            label: Text('دخول', style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
+            style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _verifyAndEnterDeveloper(BuildContext dialogContext, String pinInput, ValueNotifier<String> errorNotifier) async {
+    if (pinInput.trim().isEmpty) {
+      errorNotifier.value = 'يرجى إدخال رمز الأمان';
+      return;
+    }
+    final isValid = await DeveloperAuthService.verifyPin(pinInput);
+    if (isValid) {
+      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+      if (mounted) {
+        Navigator.of(context).push(DeveloperDashboardScreen.route());
+      }
+    } else {
+      errorNotifier.value = 'رمز الدخول غير صحيح، حاول مجدداً';
+    }
   }
 
   void _showLogoutDialog(BuildContext context) {

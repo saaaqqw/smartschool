@@ -1,34 +1,21 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../../data/models/lesson_model.dart';
 import '../../data/subject_curriculum.dart';
 import '../../services/firebase_service.dart';
+import '../../services/firebase_sync_service.dart';
+import '../../services/lesson_service.dart';
 import '../../core/stores/user_profile_store.dart';
+import '../../services/badges_service.dart';
 
-/// موديل سؤال الاختبار السريع.
-class QuizQuestion {
-  final String question;
-  final List<String> options;
-  final int correctIndex;
+// ── نُصدِّر QuizQuestion كـ typedef للتوافق مع الكود القديم ──────
+typedef QuizQuestion = QuizQuestionModel;
 
-  const QuizQuestion({
-    required this.question,
-    required this.options,
-    required this.correctIndex,
-  });
-
-  factory QuizQuestion.fromMap(Map<String, dynamic> map) {
-    final options = (map['options'] as List? ?? [])
-        .map((o) => o.toString())
-        .toList();
-    return QuizQuestion(
-      question: map['question'] as String? ?? '',
-      options: options,
-      correctIndex: (map['correctIndex'] as int?) ?? 0,
-    );
-  }
-}
-
-/// شاشة الاختبار السريع.
+/// شاشة الاختبار السريع — المنطق الجديد:
+///   • الأسئلة تأتي من subcollection مخلوطة عشوائياً.
+///   • عند الانتهاء تُحفظ الدرجة فقط إذا كانت أعلى من السابقة (Best Score).
+///   • يعرض حالة المقارنة بوضوح للطالب.
 class QuickQuizScreen extends StatefulWidget {
   const QuickQuizScreen({
     super.key,
@@ -36,35 +23,53 @@ class QuickQuizScreen extends StatefulWidget {
     required this.unit,
     required this.lessonNumber,
     required this.questions,
+    // معاملات الهوية الجديدة لحفظ الدرجة
+    this.subjectDocId = '',
+    this.lessonDocId = '',
+    this.previousBestScore = 0.0,
   });
 
   final SchoolSubject subject;
   final CurriculumUnit unit;
   final int lessonNumber;
-  final List<QuizQuestion> questions;
+  final List<QuizQuestionModel> questions;
+
+  /// معرّف المادة في Firestore (لحفظ الدرجة)
+  final String subjectDocId;
+
+  /// معرّف الدرس في Firestore (لحفظ الدرجة)
+  final String lessonDocId;
+
+  /// أعلى درجة سبق للطالب تحقيقها في هذا الدرس
+  final double previousBestScore;
 
   static Route<void> route({
     required SchoolSubject subject,
     required CurriculumUnit unit,
     required int lessonNumber,
-    required List<QuizQuestion> questions,
+    required List<QuizQuestionModel> questions,
+    String subjectDocId = '',
+    String lessonDocId = '',
+    double previousBestScore = 0.0,
   }) {
     return PageRouteBuilder<void>(
-      pageBuilder: (context, animation, secondaryAnimation) => QuickQuizScreen(
+      pageBuilder: (_, __, ___) => QuickQuizScreen(
         subject: subject,
         unit: unit,
         lessonNumber: lessonNumber,
         questions: questions,
+        subjectDocId: subjectDocId,
+        lessonDocId: lessonDocId,
+        previousBestScore: previousBestScore,
       ),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-          child: child,
-        );
-      },
+      transitionsBuilder: (_, animation, __, child) => SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 1),
+          end: Offset.zero,
+        ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        child: child,
+      ),
       transitionDuration: const Duration(milliseconds: 350),
     );
   }
@@ -79,42 +84,49 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
   int _correctCount = 0;
   bool _finished = false;
   bool _isSaving = false;
+  bool _isNewRecord = false;   // هل النتيجة الجديدة أعلى من السابقة؟
+  bool _scoreSaved = false;
   int? _selectedOption;
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
+
+  late final AnimationController _fadeCtrl;
+  late final Animation<double> _fadeAnim;
+
+  final _lessonSvc = LessonService();
 
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
+    _fadeCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
-    );
-    _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
-    _fadeController.forward();
+    )..forward();
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn);
   }
 
   @override
   void dispose() {
-    _fadeController.dispose();
+    _fadeCtrl.dispose();
     super.dispose();
   }
 
-  void _onOptionTap(int optionIndex) {
+  // ─── منطق الإجابة ───────────────────────────────────────────
+  void _onOptionTap(int i) {
     if (_selectedOption != null) return;
-    setState(() => _selectedOption = optionIndex);
-    if (optionIndex == widget.questions[_currentIndex].correctIndex) _correctCount++;
+    setState(() => _selectedOption = i);
+
+    final correct = widget.questions[_currentIndex].correctIndex;
+    if (i == correct) _correctCount++;
 
     Future.delayed(const Duration(milliseconds: 700), () {
       if (!mounted) return;
       if (_currentIndex < widget.questions.length - 1) {
-        _fadeController.reverse().then((_) {
+        _fadeCtrl.reverse().then((_) {
           if (!mounted) return;
           setState(() {
             _currentIndex++;
             _selectedOption = null;
           });
-          _fadeController.forward();
+          _fadeCtrl.forward();
         });
       } else {
         _finishQuiz();
@@ -122,23 +134,103 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
     });
   }
 
+  // ─── إنهاء الاختبار وحفظ أعلى درجة ─────────────────────────
   Future<void> _finishQuiz() async {
-    setState(() { _finished = true; _isSaving = true; });
+    setState(() {
+      _finished = true;
+      _isSaving = true;
+    });
+
+    final total = widget.questions.length;
+    final newScore = total > 0 ? _correctCount / total : 0.0;
+
     try {
       final uid = userProfileNotifier.value.uid;
       if (uid.isNotEmpty) {
+        // 1) تحديث تقدم الوحدة (السلوك القديم المحتفظ به)
         await FirebaseService().updateUnitProgress(
-          uid, widget.subject.title, widget.unit.title, 1.0,
+          uid,
+          widget.subject.title,
+          widget.unit.title,
+          newScore,
         );
+
+        // 2) حفظ أعلى درجة للدرس (Best Score) — الجديد
+        if (widget.subjectDocId.isNotEmpty && widget.lessonDocId.isNotEmpty) {
+          final updated = await _lessonSvc.saveBestScore(
+            subjectId: widget.subjectDocId,
+            lessonId: widget.lessonDocId,
+            newScore: newScore,
+          );
+          if (mounted) setState(() => _isNewRecord = updated);
+        }
+
+        // 3) ترقية مؤشر الدرس للطالب إذا اجتاز الاختبار (≥50%)
+        if (newScore >= 0.5 &&
+            widget.subjectDocId.isNotEmpty &&
+            widget.lessonDocId.isNotEmpty) {
+          try {
+            final unitIndex = widget.subject.units.indexOf(widget.unit);
+            // جلب عدد دروس الوحدة الحالية
+            int maxLessons = 5;
+            final lessons = await _lessonSvc.fetchLessonsForUnit(
+              subjectId: widget.subjectDocId,
+              unitIndex: unitIndex >= 0 ? unitIndex : 0,
+            );
+            if (lessons.isNotEmpty) maxLessons = lessons.length;
+
+            await FirebaseService().advanceLessonProgress(
+              uid: uid,
+              subjectTitle: widget.subject.title,
+              currentUnitIndex: unitIndex >= 0 ? unitIndex : 0,
+              currentLessonNumber: widget.lessonNumber,
+              maxLessonsInUnit: maxLessons,
+              maxUnits: widget.subject.units.length,
+            );
+
+            // تحديث عداد الدروس المكتملة في Firestore
+            FirebaseSyncService.incrementLessonsCompleted(
+                uid, widget.subject.title).ignore();
+
+            // فحص واكتساب الشارات الرقمية الجديدة (Gamification)
+            try {
+              final unlocked = await BadgesService.checkAndAwardBadges(
+                uid: uid,
+                subjectPercentages: {widget.subject.title: newScore * 100},
+                totalCompletedLessons: 1,
+              );
+              if (unlocked.isNotEmpty && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '🎉 مبروك! لقد حصلت على وسام جديد: ${unlocked.first}',
+                      style: GoogleFonts.tajawal(fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                    backgroundColor: const Color(0xFF10B981),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.all(16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                );
+              }
+            } catch (_) {}
+          } catch (_) {}
+        }
       }
-    } catch (_) {}
-    if (mounted) setState(() => _isSaving = false);
+      if (mounted) setState(() => _scoreSaved = true);
+    } catch (_) {
+      if (mounted) setState(() => _scoreSaved = true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
+  // ─── واجهة الاختبار ──────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = widget.subject.color;
+
     return Scaffold(
       backgroundColor: scheme.surfaceContainerLowest,
       appBar: AppBar(
@@ -151,38 +243,67 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
         title: _finished
             ? null
             : Text(
-                'اختبار سريع — ${widget.subject.title}',
-                style: GoogleFonts.tajawal(fontWeight: FontWeight.w700, fontSize: 16, color: scheme.onSurface),
+                'اختبار — ${widget.subject.title}',
+                style: GoogleFonts.tajawal(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: scheme.onSurface,
+                ),
               ),
         centerTitle: true,
       ),
-      body: _finished ? _buildResultScreen(scheme, color) : _buildQuizBody(scheme, color),
+      body: _finished
+          ? _buildResultScreen(scheme, color)
+          : _buildQuizBody(scheme, color),
     );
   }
 
+  // ─── جسم الاختبار ────────────────────────────────────────────
   Widget _buildQuizBody(ColorScheme scheme, Color color) {
-    final question = widget.questions[_currentIndex];
+    final q = widget.questions[_currentIndex];
     final total = widget.questions.length;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── رأس: رقم السؤال + عداد الصحيح ──────────────────
             Row(
               children: [
-                Text(
-                  'السؤال ${_currentIndex + 1} من $total',
-                  style: GoogleFonts.tajawal(fontWeight: FontWeight.w700, fontSize: 14, color: color),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'السؤال ${_currentIndex + 1} / $total',
+                    style: GoogleFonts.tajawal(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: color,
+                    ),
+                  ),
                 ),
                 const Spacer(),
+                const Icon(Icons.check_circle_rounded, size: 16, color: Colors.green),
+                const SizedBox(width: 4),
                 Text(
-                  '$_correctCount/$total صحيح',
-                  style: GoogleFonts.tajawal(fontWeight: FontWeight.w600, fontSize: 13, color: scheme.onSurfaceVariant),
+                  '$_correctCount صحيح',
+                  style: GoogleFonts.tajawal(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+
+            // ── شريط التقدم ──────────────────────────────────────
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: LinearProgressIndicator(
@@ -193,35 +314,48 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
               ),
             ),
             const SizedBox(height: 28),
+
+            // ── نص السؤال ────────────────────────────────────────
             FadeTransition(
-              opacity: _fadeAnimation,
+              opacity: _fadeAnim,
               child: Card(
                 elevation: 0,
-                color: color.withValues(alpha: 0.1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                color: color.withValues(alpha: 0.09),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                      color: color.withValues(alpha: 0.25), width: 1),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(22),
                   child: Text(
-                    question.question,
+                    q.question,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.tajawal(fontSize: 20, fontWeight: FontWeight.w800, color: scheme.onSurface, height: 1.5),
+                    style: GoogleFonts.tajawal(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onSurface,
+                      height: 1.55,
+                    ),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 24),
+
+            // ── خيارات الإجابة ────────────────────────────────────
             Expanded(
               child: FadeTransition(
-                opacity: _fadeAnimation,
+                opacity: _fadeAnim,
                 child: ListView.separated(
-                  itemCount: question.options.length,
+                  itemCount: q.options.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) => _OptionTile(
-                    label: question.options[i],
-                    optionLetter: _letters[i],
+                  itemBuilder: (_, i) => _OptionTile(
+                    label: q.options[i],
+                    optionLetter: _letters[i % _letters.length],
                     color: color,
                     scheme: scheme,
-                    state: _getOptionState(i, question.correctIndex),
+                    state: _optionState(i, q.correctIndex),
                     onTap: () => _onOptionTap(i),
                   ),
                 ),
@@ -233,27 +367,33 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
     );
   }
 
-  _OptionState _getOptionState(int optionIndex, int correctIndex) {
+  _OptionState _optionState(int i, int correct) {
     if (_selectedOption == null) return _OptionState.idle;
-    if (optionIndex == correctIndex) return _OptionState.correct;
-    if (optionIndex == _selectedOption) return _OptionState.wrong;
+    if (i == correct) return _OptionState.correct;
+    if (i == _selectedOption) return _OptionState.wrong;
     return _OptionState.idle;
   }
 
+  // ─── شاشة النتيجة ────────────────────────────────────────────
   Widget _buildResultScreen(ColorScheme scheme, Color color) {
     final total = widget.questions.length;
-    final pct = (_correctCount / total * 100).round();
+    final pct = total > 0 ? (_correctCount / total * 100).round() : 0;
+    final prevPct = (widget.previousBestScore * 100).round();
+
     final isPerfect = _correctCount == total;
-    final isGood = _correctCount >= (total * 0.6).ceil();
-    final resultColor = isPerfect ? Colors.amber : isGood ? color : scheme.error;
+    final isGood = pct >= 60;
+    final resultColor =
+        isPerfect ? Colors.amber : isGood ? color : scheme.error;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 20),
+
+            // ── أيقونة النتيجة ────────────────────────────────────
             Center(
               child: Container(
                 width: 120,
@@ -263,71 +403,125 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isPerfect ? Icons.star_rounded : isGood ? Icons.thumb_up_rounded : Icons.sentiment_dissatisfied_rounded,
+                  isPerfect
+                      ? Icons.star_rounded
+                      : isGood
+                          ? Icons.thumb_up_rounded
+                          : Icons.sentiment_dissatisfied_rounded,
                   size: 64,
                   color: resultColor,
                 ),
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
+
+            // ── رسالة ─────────────────────────────────────────────
             Text(
-              isPerfect ? 'ممتاز! أجبت على جميع الأسئلة بشكل صحيح! 🎉'
-                  : isGood ? 'أحسنت! أداؤك جيد جداً 👍'
-                  : 'حاول مرة أخرى لتحسين نتيجتك 💪',
+              isPerfect
+                  ? 'ممتاز! أجبت على جميع الأسئلة صحيحاً! 🎉'
+                  : isGood
+                      ? 'أحسنت! أداؤك جيد جداً 👍'
+                      : 'حاول مرة أخرى لتحسين نتيجتك 💪',
               textAlign: TextAlign.center,
-              style: GoogleFonts.tajawal(fontSize: 20, fontWeight: FontWeight.w800, color: scheme.onSurface, height: 1.5),
+              style: GoogleFonts.tajawal(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+                height: 1.5,
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
+
+            // ── بطاقة الدرجة الحالية ──────────────────────────────
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
                 decoration: BoxDecoration(
-                  color: resultColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
+                  color: resultColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: resultColor.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Column(
                   children: [
                     Text(
                       '$_correctCount / $total',
-                      style: GoogleFonts.tajawal(fontSize: 48, fontWeight: FontWeight.w900, color: resultColor),
+                      style: GoogleFonts.tajawal(
+                        fontSize: 52,
+                        fontWeight: FontWeight.w900,
+                        color: resultColor,
+                        height: 1,
+                      ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       '$pct٪ إجابات صحيحة',
-                      style: GoogleFonts.tajawal(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
+                      style: GoogleFonts.tajawal(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            Center(
-              child: _isSaving
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: color)),
-                        const SizedBox(width: 8),
-                        Text('جاري حفظ التقدم...', style: GoogleFonts.tajawal(color: scheme.onSurfaceVariant, fontSize: 13)),
-                      ],
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.cloud_done_rounded, size: 16, color: color),
-                        const SizedBox(width: 6),
-                        Text('تم حفظ التقدم بنجاح ✅', style: GoogleFonts.tajawal(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
-                      ],
+            const SizedBox(height: 16),
+
+            // ── مقارنة Best Score ─────────────────────────────────
+            if (widget.subjectDocId.isNotEmpty && !_isSaving) ...[
+              _ScoreComparisonCard(
+                scheme: scheme,
+                color: color,
+                currentPct: pct,
+                previousPct: prevPct,
+                isNewRecord: _isNewRecord,
+                isSaved: _scoreSaved,
+              ),
+            ] else if (_isSaving) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: color),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'جاري حفظ الدرجة...',
+                    style: GoogleFonts.tajawal(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 13,
                     ),
-            ),
-            const SizedBox(height: 36),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 32),
+
+            // ── أزرار ─────────────────────────────────────────────
             FilledButton.icon(
-              onPressed: () => Navigator.of(context)..pop()..pop(),
+              onPressed: () => Navigator.of(context)
+                ..pop()
+                ..pop(),
               icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text('العودة للوحدة', style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.w700)),
+              label: Text(
+                'العودة للدرس',
+                style: GoogleFonts.tajawal(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: color,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
           ],
@@ -337,7 +531,104 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
   }
 }
 
-const List<String> _letters = ['أ', 'ب', 'ج', 'د'];
+// ═══════════════════════════════════════════════════════════════
+// بطاقة مقارنة الدرجات (Best Score)
+// ═══════════════════════════════════════════════════════════════
+class _ScoreComparisonCard extends StatelessWidget {
+  const _ScoreComparisonCard({
+    required this.scheme,
+    required this.color,
+    required this.currentPct,
+    required this.previousPct,
+    required this.isNewRecord,
+    required this.isSaved,
+  });
+
+  final ColorScheme scheme;
+  final Color color;
+  final int currentPct;
+  final int previousPct;
+  final bool isNewRecord;
+  final bool isSaved;
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = isNewRecord
+        ? const Color(0xFF00897B).withValues(alpha: 0.1)
+        : scheme.surfaceContainerLow;
+    final borderColor = isNewRecord
+        ? const Color(0xFF00897B).withValues(alpha: 0.4)
+        : scheme.outlineVariant.withValues(alpha: 0.5);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          // أيقونة
+          Icon(
+            isNewRecord
+                ? Icons.emoji_events_rounded
+                : Icons.history_rounded,
+            color: isNewRecord
+                ? const Color(0xFF00897B)
+                : scheme.onSurfaceVariant,
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          // معلومات
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isNewRecord
+                      ? '🏆 رقم قياسي جديد!'
+                      : 'أعلى درجة سابقة: $previousPct٪',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: isNewRecord
+                        ? const Color(0xFF00897B)
+                        : scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isNewRecord
+                      ? 'تحسّنت من $previousPct٪ إلى $currentPct٪ 🎯'
+                      : 'درجتك الحالية ($currentPct٪) لم تتجاوز الرقم السابق',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // حالة الحفظ
+          if (isSaved)
+            Icon(
+              Icons.cloud_done_rounded,
+              size: 20,
+              color: isNewRecord
+                  ? const Color(0xFF00897B)
+                  : scheme.onSurfaceVariant,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// خيار إجابة
+// ═══════════════════════════════════════════════════════════════
+const List<String> _letters = ['أ', 'ب', 'ج', 'د', 'هـ'];
 
 enum _OptionState { idle, correct, wrong }
 
@@ -350,6 +641,7 @@ class _OptionTile extends StatelessWidget {
     required this.state,
     required this.onTap,
   });
+
   final String label;
   final String optionLetter;
   final Color color;
@@ -361,50 +653,71 @@ class _OptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final bgColor = switch (state) {
       _OptionState.correct => Colors.green.withValues(alpha: 0.15),
-      _OptionState.wrong   => Colors.red.withValues(alpha: 0.15),
-      _OptionState.idle    => scheme.surfaceContainerHigh,
+      _OptionState.wrong => Colors.red.withValues(alpha: 0.15),
+      _OptionState.idle => scheme.surfaceContainerHigh,
     };
     final borderColor = switch (state) {
       _OptionState.correct => Colors.green,
-      _OptionState.wrong   => Colors.red,
-      _OptionState.idle    => Colors.transparent,
+      _OptionState.wrong => Colors.red,
+      _OptionState.idle => Colors.transparent,
     };
     final letterColor = switch (state) {
       _OptionState.correct => Colors.green,
-      _OptionState.wrong   => Colors.red,
-      _OptionState.idle    => color,
+      _OptionState.wrong => Colors.red,
+      _OptionState.idle => color,
     };
     final icon = switch (state) {
       _OptionState.correct => Icons.check_circle_rounded,
-      _OptionState.wrong   => Icons.cancel_rounded,
-      _OptionState.idle    => null,
+      _OptionState.wrong => Icons.cancel_rounded,
+      _OptionState.idle => null,
     };
+
     return GestureDetector(
       onTap: state == _OptionState.idle ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor, width: state == _OptionState.idle ? 0 : 1.5),
+          border: Border.all(
+            color: borderColor,
+            width: state == _OptionState.idle ? 0 : 1.5,
+          ),
         ),
         child: Row(
           children: [
             Container(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: letterColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
-              child: Text(optionLetter, style: GoogleFonts.tajawal(fontWeight: FontWeight.w800, fontSize: 16, color: letterColor)),
+              child: Text(
+                optionLetter,
+                style: GoogleFonts.tajawal(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: letterColor,
+                ),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(label, style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.w700, color: scheme.onSurface)),
+              child: Text(
+                label,
+                style: GoogleFonts.tajawal(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
             ),
-            if (icon != null) Icon(icon, color: borderColor, size: 22),
+            if (icon != null)
+              Icon(icon, color: borderColor, size: 22),
           ],
         ),
       ),

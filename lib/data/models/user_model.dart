@@ -8,6 +8,9 @@ class UserModel {
   final int age;
   final String gender;
   final String profileImageUrl;
+  final String email;
+  final String pin;
+  final String semester;
   final DateTime? createdAt;
 
   const UserModel({
@@ -18,6 +21,9 @@ class UserModel {
     required this.age,
     required this.gender,
     this.profileImageUrl = '',
+    this.email = '',
+    this.pin = '',
+    this.semester = 'الفصل الدراسي الأول',
     this.createdAt,
   });
 
@@ -31,6 +37,9 @@ class UserModel {
       age: data['age'] ?? 0,
       gender: data['gender'] ?? '',
       profileImageUrl: data['profileImageUrl'] ?? '',
+      email: data['email'] ?? '',
+      pin: data['pin'] ?? '',
+      semester: data['semester'] ?? 'الفصل الدراسي الأول',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
     );
   }
@@ -43,6 +52,9 @@ class UserModel {
       'age': age,
       'gender': gender,
       'profileImageUrl': profileImageUrl,
+      'email': email,
+      'pin': pin,
+      'semester': semester,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
     };
   }
@@ -55,6 +67,9 @@ class UserModel {
     int? age,
     String? gender,
     String? profileImageUrl,
+    String? email,
+    String? pin,
+    String? semester,
     DateTime? createdAt,
   }) {
     return UserModel(
@@ -65,7 +80,11 @@ class UserModel {
       age: age ?? this.age,
       gender: gender ?? this.gender,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      email: email ?? this.email,
+      pin: pin ?? this.pin,
+      semester: semester ?? this.semester,
       createdAt: createdAt ?? this.createdAt,
     );
   }
 }
+

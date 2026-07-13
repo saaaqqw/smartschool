@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../services/firebase_service.dart';
+import '../../services/firebase_sync_service.dart';
 import '../../core/stores/user_profile_store.dart';
+import '../../core/stores/study_timer_store.dart';
 import '../shell/main_navigation_screen.dart';
 import 'register_screen.dart';
 
@@ -24,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _firebaseService = FirebaseService();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _isPasswordlessMode = true; // الخيار الأساسي: رابط البريد (Passwordless Sign-In)
 
   @override
   void dispose() {
@@ -32,7 +36,96 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _login() async {
+  Future<void> _sendEmailLink() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final email = _emailController.text.trim();
+    setState(() => _isLoading = true);
+
+    try {
+      final actionCodeSettings = ActionCodeSettings(
+        url: 'https://saqer1-448ea.firebaseapp.com/login',
+        handleCodeInApp: true,
+        androidPackageName: 'com.example.smart_school1',
+        androidInstallApp: true,
+        androidMinimumVersion: '1',
+      );
+
+      await _firebaseService.sendSignInLinkToEmail(
+        email: email,
+        actionCodeSettings: actionCodeSettings,
+      );
+
+      if (!mounted) return;
+      _showEmailSentDialog(email);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('فشل إرسال رابط التحقق: $e', style: GoogleFonts.tajawal())),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showEmailSentDialog(String email) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.mark_email_read_rounded, color: Colors.green, size: 30),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'تم إرسال رابط التحقق!',
+                  style: GoogleFonts.tajawal(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'أرسلنا رابط التحقق المباشر إلى بريدك الإلكتروني:',
+                style: GoogleFonts.tajawal(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  email,
+                  style: GoogleFonts.tajawal(fontWeight: FontWeight.bold, color: Colors.blue.shade700),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'يرجى فتح بريدك الإلكتروني والضغط على الرابط ليتم تفعيل حسابك ونقلك تلقائياً دون الحاجة لأي رمز.',
+                style: GoogleFonts.tajawal(fontSize: 13, height: 1.5, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('حسناً، فهمت', style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _loginWithPassword() async {
     if (!_formKey.currentState!.validate()) return;
 
     final email = _emailController.text.trim();
@@ -47,7 +140,11 @@ class _LoginScreenState extends State<LoginScreen> {
       // Load user profile from Firestore
       final model = await _firebaseService.getUserProfile(uid);
       if (model != null) {
-        await saveUserProfile(UserProfile.fromUserModel(model));
+        final profile = UserProfile.fromUserModel(model).copyWith(
+          email: model.email.isNotEmpty ? model.email : email,
+          pin: model.pin.isNotEmpty ? model.pin : password,
+        );
+        await saveUserProfile(profile);
       } else if (uid.isNotEmpty) {
         await saveUserProfile(UserProfile(
           uid: uid,
@@ -56,6 +153,8 @@ class _LoginScreenState extends State<LoginScreen> {
           grade: RegisterScreen.gradeOptions.first,
           age: 0,
           gender: RegisterScreen.genderOptions.first,
+          email: email,
+          pin: password,
         ));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -68,6 +167,23 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       }
+
+      if (!mounted) return;
+
+      // ── تهيئة Firebase بعد تسجيل الدخول ───────────────────────
+      FirebaseSyncService.initializeAllSubjects().ignore();
+      FirebaseSyncService.initializeUserProgress(uid).ignore();
+
+      // استعادة حالة المؤقت من آخر جلسة
+      try {
+        final saved = await FirebaseSyncService.loadTimerState(uid);
+        if (saved.isNotEmpty) {
+          final seconds = (saved['elapsedSeconds'] as num?)?.toInt() ?? 0;
+          final target = (saved['targetMinutes'] as num?)?.toInt() ?? 120;
+          studyTimerStore.setTarget(target);
+          if (seconds > 0) studyTimerStore.restoreElapsed(Duration(seconds: seconds));
+        }
+      } catch (_) {}
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil<void>(
@@ -104,6 +220,22 @@ class _LoginScreenState extends State<LoginScreen> {
           profileImageUrl: creds.user?.photoURL ?? '',
         ));
       }
+
+      if (!mounted) return;
+
+      // ── تهيئة Firebase بعد تسجيل الدخول بجوجل ─────────────────
+      FirebaseSyncService.initializeAllSubjects().ignore();
+      FirebaseSyncService.initializeUserProgress(uid).ignore();
+
+      try {
+        final saved = await FirebaseSyncService.loadTimerState(uid);
+        if (saved.isNotEmpty) {
+          final seconds = (saved['elapsedSeconds'] as num?)?.toInt() ?? 0;
+          final target = (saved['targetMinutes'] as num?)?.toInt() ?? 120;
+          studyTimerStore.setTarget(target);
+          if (seconds > 0) studyTimerStore.restoreElapsed(Duration(seconds: seconds));
+        }
+      } catch (_) {}
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil<void>(
@@ -167,7 +299,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       body: Stack(
         children: [
-          // خلفية متدرجة متناسقة مع شاشة الترحيب
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -188,7 +319,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           
-          // دوائر جمالية ناعمة في الخلفية
           Positioned(
             top: -size.height * 0.1,
             left: -size.width * 0.2,
@@ -214,7 +344,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // المحتوى الأساسي
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -225,7 +354,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // الأيقونة العلوية مع لمسة جمالية
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
@@ -233,33 +361,35 @@ class _LoginScreenState extends State<LoginScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          Icons.lock_person_rounded,
+                          _isPasswordlessMode ? Icons.mark_email_read_outlined : Icons.lock_person_rounded,
                           size: 64,
                           color: scheme.primary,
                         ),
                       ),
                       const SizedBox(height: 20),
                       
-                      // عنوان الشاشة
                       Text(
-                        'مرحباً بك مجدداً!',
+                        _isPasswordlessMode ? 'الدخول والتسجيل السريع' : 'تسجيل الدخول',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
-                          fontSize: 28,
+                          fontSize: 26,
                           fontWeight: FontWeight.w900,
                           color: scheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'قم بتسجيل الدخول لمتابعة رحلتك التعليمية.',
+                        _isPasswordlessMode
+                            ? 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً سحرياً لتسجيل الدخول أو إنشاء حساب جديد فوراً.'
+                            : 'قم بتسجيل الدخول بكلمة المرور لمتابعة رحلتك التعليمية.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
-                          fontSize: 15,
+                          fontSize: 14,
                           color: scheme.onSurfaceVariant,
+                          height: 1.4,
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 28),
 
                       // بطاقة النموذج الزجاجية
                       Container(
@@ -283,7 +413,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         child: Column(
                           children: [
-                            // حقل البريد الإلكتروني
                             TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
@@ -296,56 +425,72 @@ class _LoginScreenState extends State<LoginScreen> {
                                 return null;
                               },
                             ),
-                            const SizedBox(height: 18),
-                            
-                            // حقل كلمة المرور
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              decoration: _fieldDecoration(
-                                scheme,
-                                label: 'كلمة المرور',
-                                icon: Icons.lock_outline_rounded,
-                                suffix: IconButton(
-                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                  icon: Icon(
-                                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                    color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                            if (!_isPasswordlessMode) ...[
+                              const SizedBox(height: 18),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                decoration: _fieldDecoration(
+                                  scheme,
+                                  label: 'كلمة المرور',
+                                  icon: Icons.lock_outline_rounded,
+                                  suffix: IconButton(
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    icon: Icon(
+                                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                                    ),
                                   ),
                                 ),
+                                style: GoogleFonts.tajawal(fontSize: 16),
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) return 'يرجى إدخال كلمة المرور';
+                                  if (v.trim().length < 6) return 'كلمة المرور يجب أن لا تقل عن 6 خانات';
+                                  return null;
+                                },
                               ),
-                              style: GoogleFonts.tajawal(fontSize: 16),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return 'يرجى إدخال كلمة المرور';
-                                if (v.trim().length < 6) return 'كلمة المرور يجب أن لا تقل عن 6 خانات';
-                                return null;
-                              },
-                            ),
+                            ],
                           ],
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 28),
 
                       // أزرار العمليات
                       if (_isLoading)
                         const Center(child: CircularProgressIndicator())
                       else ...[
-                        // زر تسجيل الدخول الأساسي
                         FilledButton(
-                          onPressed: _login,
+                          onPressed: _isPasswordlessMode ? _sendEmailLink : _loginWithPassword,
                           style: FilledButton.styleFrom(
                             minimumSize: const Size.fromHeight(56),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 0,
                           ),
                           child: Text(
-                            'تسجيل الدخول',
+                            _isPasswordlessMode ? 'إرسال رابط التحقق السريع 🚀' : 'تسجيل الدخول',
                             style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         
-                        // زر تسجيل الدخول بواسطة جوجل
+                        // زر التبديل بين وضع رابط البريد ووضع كلمة المرور
+                        TextButton(
+                          onPressed: () {
+                            setState(() => _isPasswordlessMode = !_isPasswordlessMode);
+                          },
+                          child: Text(
+                            _isPasswordlessMode
+                                ? 'الدخول بواسطة كلمة المرور (للحسابات القديمة)'
+                                : 'الرجوع إلى التسجيل والدخول عبر رابط البريد السريع',
+                            style: GoogleFonts.tajawal(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: scheme.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        
                         OutlinedButton.icon(
                           onPressed: _loginWithGoogle,
                           icon: Image.network(
@@ -362,46 +507,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             side: BorderSide(color: scheme.outline.withValues(alpha: 0.25)),
                             backgroundColor: isDark 
-                                ? Colors.white.withValues(alpha: 0.04) 
+                                ? Colors.white.withValues(alpha: 0.04)
                                 : Colors.white.withValues(alpha: 0.7),
                           ),
                         ),
                       ],
-                      const SizedBox(height: 32),
-
-                      // السؤال والرابط لإنشاء حساب جديد
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'ليس لديك حساب؟',
-                            style: GoogleFonts.tajawal(
-                              color: scheme.onSurfaceVariant,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).push(RegisterScreen.route(
-                                email: _emailController.text.trim(),
-                                password: _passwordController.text.trim(),
-                              ));
-                            },
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                            ),
-                            child: Text(
-                              'إنشاء حساب جديد',
-                              style: GoogleFonts.tajawal(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                color: scheme.primary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),

@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/firebase_service.dart';
 import '../../data/models/user_model.dart';
 
-/// حقول التسجيل: الاسم الرباعي، المدرسة، الصف، العمر، الجنس.
+/// حقول التسجيل: الاسم الرباعي، المدرسة، الصف، العمر، الجنس، البريد الإلكتروني، والرمز.
 class UserProfile {
   const UserProfile({
     required this.uid,
@@ -13,6 +13,9 @@ class UserProfile {
     required this.age,
     required this.gender,
     this.profileImageUrl = '',
+    this.email = '',
+    this.pin = '',
+    this.semester = 'الفصل الدراسي الأول',
   });
 
   final String uid;
@@ -22,6 +25,9 @@ class UserProfile {
   final int age;
   final String gender;
   final String profileImageUrl;
+  final String email;
+  final String pin;
+  final String semester;
 
   factory UserProfile.fromUserModel(UserModel user) {
     return UserProfile(
@@ -32,6 +38,9 @@ class UserProfile {
       age: user.age,
       gender: user.gender,
       profileImageUrl: user.profileImageUrl,
+      email: user.email,
+      pin: user.pin,
+      semester: user.semester,
     );
   }
 
@@ -44,6 +53,9 @@ class UserProfile {
       age: map['age'] ?? 0,
       gender: map['gender'] ?? '',
       profileImageUrl: map['profileImageUrl'] ?? '',
+      email: map['email'] ?? '',
+      pin: map['pin'] ?? '',
+      semester: map['semester'] ?? 'الفصل الدراسي الأول',
     );
   }
 
@@ -56,6 +68,9 @@ class UserProfile {
       'age': age,
       'gender': gender,
       'profileImageUrl': profileImageUrl,
+      'email': email,
+      'pin': pin,
+      'semester': semester,
     };
   }
 
@@ -67,6 +82,9 @@ class UserProfile {
     int? age,
     String? gender,
     String? profileImageUrl,
+    String? email,
+    String? pin,
+    String? semester,
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
@@ -76,6 +94,9 @@ class UserProfile {
       age: age ?? this.age,
       gender: gender ?? this.gender,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      email: email ?? this.email,
+      pin: pin ?? this.pin,
+      semester: semester ?? this.semester,
     );
   }
 
@@ -86,6 +107,9 @@ class UserProfile {
     grade: '',
     age: 0,
     gender: '',
+    email: '',
+    pin: '',
+    semester: 'الفصل الدراسي الأول',
   );
 }
 
@@ -99,6 +123,9 @@ const String _kGrade = 'profile_grade';
 const String _kAge = 'profile_age';
 const String _kGender = 'profile_gender';
 const String _kProfileImageUrl = 'profile_image_url';
+const String _kEmail = 'profile_email';
+const String _kPin = 'profile_pin';
+const String _kSemester = 'profile_semester';
 
 Future<void> loadUserProfile() async {
   final p = await SharedPreferences.getInstance();
@@ -116,6 +143,9 @@ Future<void> loadUserProfile() async {
     age: p.getInt(_kAge) ?? 0,
     gender: p.getString(_kGender) ?? '',
     profileImageUrl: p.getString(_kProfileImageUrl) ?? '',
+    email: p.getString(_kEmail) ?? '',
+    pin: p.getString(_kPin) ?? '',
+    semester: p.getString(_kSemester) ?? 'الفصل الدراسي الأول',
   );
 }
 
@@ -128,6 +158,9 @@ Future<void> saveUserProfile(UserProfile profile) async {
   await p.setInt(_kAge, profile.age);
   await p.setString(_kGender, profile.gender);
   await p.setString(_kProfileImageUrl, profile.profileImageUrl);
+  await p.setString(_kEmail, profile.email);
+  await p.setString(_kPin, profile.pin);
+  await p.setString(_kSemester, profile.semester);
 
   if (profile.uid.isNotEmpty) {
     final firebaseService = FirebaseService();
@@ -139,10 +172,37 @@ Future<void> saveUserProfile(UserProfile profile) async {
       age: profile.age,
       gender: profile.gender,
       profileImageUrl: profile.profileImageUrl,
+      email: profile.email,
+      pin: profile.pin,
+      semester: profile.semester,
     ));
   }
 
   userProfileNotifier.value = profile;
+}
+
+Future<void> updateSelectedSemester(String newSemester) async {
+  final current = userProfileNotifier.value;
+  final updated = current.copyWith(semester: newSemester);
+  userProfileNotifier.value = updated;
+  final p = await SharedPreferences.getInstance();
+  await p.setString(_kSemester, newSemester);
+
+  if (updated.uid.isNotEmpty) {
+    final firebaseService = FirebaseService();
+    await firebaseService.saveUserProfile(UserModel(
+      uid: updated.uid,
+      fullName: updated.fullName,
+      school: updated.school,
+      grade: updated.grade,
+      age: updated.age,
+      gender: updated.gender,
+      profileImageUrl: updated.profileImageUrl,
+      email: updated.email,
+      pin: updated.pin,
+      semester: updated.semester,
+    ));
+  }
 }
 
 Future<void> clearUserProfile() async {
@@ -154,6 +214,9 @@ Future<void> clearUserProfile() async {
   await p.remove(_kAge);
   await p.remove(_kGender);
   await p.remove(_kProfileImageUrl);
+  await p.remove(_kEmail);
+  await p.remove(_kPin);
+  await p.remove(_kSemester);
   userProfileNotifier.value = UserProfile.empty;
 }
 
@@ -162,3 +225,5 @@ String firstNameFromFullName(String fullName) {
   if (t.isEmpty) return 'طالب';
   return t.split(RegExp(r'\s+')).first;
 }
+
+
