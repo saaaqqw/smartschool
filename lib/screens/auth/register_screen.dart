@@ -2,12 +2,11 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/stores/user_profile_store.dart';
 import '../../services/firebase_service.dart';
 import '../../services/firebase_sync_service.dart';
+import '../../widgets/profile_image_picker_sheet.dart';
 import '../shell/main_navigation_screen.dart';
 import 'login_screen.dart';
 
@@ -94,7 +93,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late String _selectedGrade;
   late String _gender;
 
-  final _picker = ImagePicker();
   File? _imageFile;
   bool _isLoading = false;
 
@@ -135,18 +133,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _pickImage() async {
-    try {
-      final picked = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 75,
-        maxWidth: 512,
-      );
-      if (picked != null) {
-        setState(() => _imageFile = File(picked.path));
-      }
-    } catch (e) {
-      debugPrint('Error picking image: $e');
-    }
+    await ProfileImagePickerSheet.show(context);
+    if (mounted) setState(() {});
   }
 
   Future<void> _submit() async {
@@ -165,7 +153,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       String uid = userProfileNotifier.value.uid;
 
       if (!widget.isEditMode) {
-        final currentUser = FirebaseAuth.instance.currentUser;
+        final currentUser = firebaseService.currentUser;
         if (currentUser != null) {
           createdUser = currentUser;
           uid = createdUser.uid;
@@ -267,48 +255,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildAvatar(ColorScheme scheme) {
     return Center(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 116,
-            height: 116,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: scheme.primaryContainer,
-              border: Border.all(color: scheme.primary.withValues(alpha: 0.2), width: 2),
-            ),
-            child: ClipOval(
-              child: _imageFile != null
-                  ? Image.file(_imageFile!, fit: BoxFit.cover)
-                  : (userProfileNotifier.value.profileImageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: userProfileNotifier.value.profileImageUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                          errorWidget: (context, url, error) => Icon(Icons.person_rounded, size: 64, color: scheme.onPrimaryContainer),
-                        )
-                      : Icon(Icons.person_rounded, size: 64, color: scheme.onPrimaryContainer)),
-            ),
-          ),
-          PositionedDirectional(
-            end: 0,
-            bottom: 0,
-            child: Material(
-              color: scheme.primary,
-              elevation: 4,
-              shape: const CircleBorder(),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
+      child: ValueListenableBuilder<UserProfile>(
+        valueListenable: userProfileNotifier,
+        builder: (context, profile, _) {
+          final imageProvider = getProfileImageProvider(profile.profileImageUrl);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GestureDetector(
                 onTap: _pickImage,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Icon(Icons.camera_alt_rounded, size: 20, color: scheme.onPrimary),
+                child: Container(
+                  width: 116,
+                  height: 116,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: scheme.primaryContainer,
+                    border: Border.all(color: scheme.primary.withValues(alpha: 0.2), width: 2),
+                  ),
+                  child: ClipOval(
+                    child: _imageFile != null
+                        ? Image.file(_imageFile!, fit: BoxFit.cover)
+                        : (imageProvider != null
+                            ? Image(image: imageProvider, fit: BoxFit.cover)
+                            : Icon(Icons.person_rounded, size: 64, color: scheme.onPrimaryContainer)),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+              PositionedDirectional(
+                end: 0,
+                bottom: 0,
+                child: Material(
+                  color: scheme.primary,
+                  elevation: 4,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: _pickImage,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(Icons.camera_alt_rounded, size: 20, color: scheme.onPrimary),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

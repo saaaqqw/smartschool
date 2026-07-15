@@ -106,6 +106,25 @@ class DatabaseCleanupService {
     return totalDeleted;
   }
 
+  /// الفحص والتنظيف الشامل لقاعدة البيانات بصمت (صالح للاستدعاء التلقائي عند فتح لوحة المطور)
+  static Future<void> cleanAllOnce() async {
+    try {
+      debugPrint('🧹 [DatabaseCleanupService] بدء الفحص والتنظيف التلقائي لقاعدة البيانات...');
+      final subCount = await cleanOldSubcollections();
+      final engCount = await deleteEnglishDuplicateSubjects();
+      final gradesCount = await cleanOldUnscopedGrades();
+      final total = subCount + engCount + gradesCount;
+      if (total > 0) {
+        debugPrint(
+            '🎉 [DatabaseCleanupService] تم تنظيف قاعدة البيانات بنجاح: تم حذف $total عنصر ($engCount مواد إنجليزية، $subCount مجلد فرعي، $gradesCount سجل درجات غير معرف)');
+      } else {
+        debugPrint('✨ [DatabaseCleanupService] قاعدة البيانات نظيفة تماماً ولا تحتوي على أي مخلفات قديمة.');
+      }
+    } catch (e) {
+      debugPrint('❌ [DatabaseCleanupService] خطأ أثناء الفحص والتنظيف التلقائي: $e');
+    }
+  }
+
   /// دالة مساعدة لحذف كافة المستندات داخل CollectionReference باستخدام Batch
   static Future<int> _deleteCollection(CollectionReference collRef) async {
     int deletedCount = 0;

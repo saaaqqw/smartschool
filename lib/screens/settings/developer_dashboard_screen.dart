@@ -67,8 +67,10 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   int _selectedUnitIndex = 0;
   int _selectedLessonNumber = 1;
 
-  final List<String> _gradeOptions = [
+  List<String> _gradeOptions = [
     'الصف السابع',
+    'الصف الثامن',
+    'الصف التاسع',
   ];
 
   final List<String> _semesterOptions = [
@@ -86,7 +88,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   final _lessonTitleController = TextEditingController();
   final _videoUrlController = TextEditingController();
   final _summaryTextController = TextEditingController();
-  final _summaryUrlController = TextEditingController();
 
   // ── 2.1) حقول ومتحكمات كتاب المادة الدراسي (Google Drive / PDF) ─────────────
   final _bookTitleController = TextEditingController();
@@ -107,14 +108,66 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   // ── حالات التحميل ────────────────────────────────────────────────────────
   bool _isPublishing = false;
   bool _isLoadingLessonFromDb = false;
-  bool _isCleaningDb = false;
   bool _isSavingQuestionToDb = false;
 
   @override
   void initState() {
     super.initState();
+    _fetchGradesFromDatabase();
     _initSubjectData();
     _loadAiSettings();
+    DatabaseCleanupService.cleanAllOnce();
+  }
+
+  Future<void> _fetchGradesFromDatabase() async {
+    try {
+      final db = FirebaseFirestore.instance;
+      final snap = await db.collection('subjects').get();
+      final Set<String> foundGrades = {
+        'الصف الأول',
+        'الصف الثاني',
+        'الصف الثالث',
+        'الصف الرابع',
+        'الصف الخامس',
+        'الصف السادس',
+        'الصف السابع',
+        'الصف الثامن',
+        'الصف التاسع',
+        'الصف العاشر',
+        'الصف الحادي عشر',
+        'الصف الثاني عشر',
+      };
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (data['grade'] is String && (data['grade'] as String).trim().isNotEmpty) {
+          foundGrades.add((data['grade'] as String).trim());
+        }
+      }
+
+      final sortedList = foundGrades.toList();
+      final kGradeOrder = [
+        'الصف الأول', 'الصف الثاني', 'الصف الثالث', 'الصف الرابع', 'الصف الخامس', 'الصف السادس',
+        'الصف السابع', 'الصف الثامن', 'الصف التاسع', 'الصف العاشر', 'الصف الحادي عشر', 'الصف الثاني عشر'
+      ];
+      sortedList.sort((a, b) {
+        final indexA = kGradeOrder.indexOf(a);
+        final indexB = kGradeOrder.indexOf(b);
+        if (indexA != -1 && indexB != -1) return indexA.compareTo(indexB);
+        if (indexA != -1) return -1;
+        if (indexB != -1) return 1;
+        return a.compareTo(b);
+      });
+
+      if (mounted) {
+        setState(() {
+          _gradeOptions = sortedList;
+          if (!_gradeOptions.contains(_selectedGrade) && _gradeOptions.isNotEmpty) {
+            _selectedGrade = _gradeOptions.first;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadAiSettings() async {
@@ -154,7 +207,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     _lessonTitleController.dispose();
     _videoUrlController.dispose();
     _summaryTextController.dispose();
-    _summaryUrlController.dispose();
     _bookTitleController.dispose();
     _bookUrlController.dispose();
     _qTextController.dispose();
@@ -285,7 +337,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       String title = '';
       String video = '';
       String summary = '';
-      String summaryUrl = '';
       _tempQuestionsList.clear();
 
       List<Map<String, dynamic>> dbUnits = providedUnits ?? [];
@@ -309,7 +360,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           title = lData['title'] as String? ?? '';
           video = lData['videoUrl'] as String? ?? '';
           summary = lData['summaryContent'] as String? ?? '';
-          summaryUrl = lData['summaryUrl'] as String? ?? '';
 
           final qList = lData['questions'] as List? ?? [];
           for (final item in qList) {
@@ -332,7 +382,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       _lessonTitleController.text = title;
       _videoUrlController.text = video;
       _summaryTextController.text = summary;
-      _summaryUrlController.text = summaryUrl;
     } catch (e) {
       debugPrint('Error loading lesson $lessonNum: $e');
     } finally {
@@ -430,9 +479,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           lessonsList.add({
             'title': 'الدرس ${lessonsList.length + 1}',
             'videoUrl': _videoUrlController.text.trim(),
-            'summaryContent': _summaryTextController.text.trim().isNotEmpty
-                ? _summaryTextController.text.trim()
-                : _summaryUrlController.text.trim(),
+            'summaryContent': _summaryTextController.text.trim(),
             'questions': [],
           });
         }
@@ -600,7 +647,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       final lessonTitle = _lessonTitleController.text.trim();
       final videoUrlStr = _videoUrlController.text.trim();
       final summaryText = _summaryTextController.text.trim();
-      final summaryUrlStr = _summaryUrlController.text.trim();
 
       // المسار الاحترافي للمادة: subjects/{subjectDocId}
       final subjectDocRef = db.collection('subjects').doc(subjectDocId);
@@ -652,13 +698,10 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
               })
           .toList();
 
-      final cleanSummaryContent =
-          summaryText.isNotEmpty ? summaryText : summaryUrlStr;
-
       lessonsList[lessonNumber - 1] = {
         'title': lessonTitle.isNotEmpty ? lessonTitle : 'الدرس $lessonNumber',
         'videoUrl': videoUrlStr,
-        'summaryContent': cleanSummaryContent,
+        'summaryContent': summaryText,
         'questions': cleanQuestionsList,
       };
 
@@ -691,7 +734,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     _lessonTitleController.clear();
     _videoUrlController.clear();
     _summaryTextController.clear();
-    _summaryUrlController.clear();
     _qTextController.clear();
     _qOptAController.clear();
     _qOptBController.clear();
@@ -701,22 +743,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       _qCorrectIndex = 0;
       _tempQuestionsList.clear();
     });
-  }
-
-  Future<void> _cleanOldDatabaseSubcollections() async {
-    setState(() => _isCleaningDb = true);
-    try {
-      final subCount = await DatabaseCleanupService.cleanOldSubcollections();
-      final engCount = await DatabaseCleanupService.deleteEnglishDuplicateSubjects();
-      final gradesCount = await DatabaseCleanupService.cleanOldUnscopedGrades();
-      final total = subCount + engCount + gradesCount;
-      _showSnackBar(
-          'تم تنظيف قاعدة البيانات بالكامل ($total إجمالي محذوفات: $engCount مواد قديمة، $subCount مجلد فرعي، و$gradesCount سجل درجات قديم) 🧹✨');
-    } catch (e) {
-      _showSnackBar('حدث خطأ أثناء تنظيف قاعدة البيانات: $e ❌', isError: true);
-    } finally {
-      if (mounted) setState(() => _isCleaningDb = false);
-    }
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -1224,19 +1250,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                       ),
                       const SizedBox(height: 18),
 
-                      // حقل رابط ملف الملخص (PDF / سحابي)
-                      _buildTextFormField(
-                        label: 'رابط ملف الملخص (PDF / Google Drive / إن وجد)',
-                        controller: _summaryUrlController,
-                        hint: 'رابط لتحميل أو فتح ملف الملخص للطالب (اختياري)',
-                        borderColor: borderColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary,
-                        prefixIcon: const Icon(Icons.attachment_rounded,
-                            color: Colors.amberAccent, size: 20),
-                      ),
-                      const SizedBox(height: 18),
-
                       // حقل نص الملخص الشامل
                       _buildTextFormField(
                         label: 'نص الملخص الشامل وشرح النقاط الرئيسية',
@@ -1718,47 +1731,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                         ),
                       ),
                     ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // زر تنظيف قاعدة البيانات وإزالة المجموعات الفرعية القديمة (lessons / summaries / questions)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: OutlinedButton.icon(
-                  onPressed: (_isPublishing || _isCleaningDb)
-                      ? null
-                      : _cleanOldDatabaseSubcollections,
-                  icon: _isCleaningDb
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.redAccent,
-                          ),
-                        )
-                      : const Icon(Icons.cleaning_services_rounded,
-                          size: 22, color: Colors.redAccent),
-                  label: Text(
-                    _isCleaningDb
-                        ? 'جاري تنظيف وحذف المواد الإنجليزية والمجلدات القديمة...'
-                        : 'تنظيف قاعدة البيانات وحذف المواد الإنجليزية المكررة والمجلدات القديمة 🧹',
-                    style: GoogleFonts.tajawal(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.redAccent,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.redAccent,
-                    side: const BorderSide(color: Colors.redAccent, width: 1.5),
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
                   ),
                 ),
               ),

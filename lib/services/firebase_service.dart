@@ -172,6 +172,9 @@ class FirebaseService {
     await docRef.set({
       'currentUnitIndex': nextUnit,
       'currentLessonNumber': nextLesson,
+      'completed_lessons_set': FieldValue.arrayUnion([
+        'u${currentUnitIndex}_l$currentLessonNumber',
+      ]),
       'lastUpdated': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

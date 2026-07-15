@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/stores/user_profile_store.dart';
 import '../../core/stores/study_timer_store.dart';
@@ -12,6 +11,7 @@ import '../settings/settings_screen.dart';
 import '../study/study_plan_screen.dart';
 import '../subjects/subjects_screen.dart';
 import '../chat/chat_screen.dart';
+import '../../widgets/profile_image_picker_sheet.dart';
 
 import '../../data/subject_curriculum.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -32,10 +32,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
   final _scheduleService = WeeklyScheduleService();
-
-  // إعدادات وقت الجدول (يُجلب من Firestore)
-  int _startHour = 16;
-  int _startMinute = 0;
 
   @override
   void initState() {
@@ -89,12 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     try {
       final ws = await _scheduleService.fetchSchedule(uid);
       if (mounted) {
-        setState(() {
-          _startHour = ws.startHour;
-          _startMinute = ws.startMinute;
-          // تعيين المدة المستهدفة في المؤقت العالمي
-          studyTimerStore.setTarget(ws.durationMinutes);
-        });
+        studyTimerStore.setTarget(ws.durationMinutes);
       }
     } catch (_) {}
   }
@@ -188,27 +179,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                       ),
                     ),
-                    // — مؤقت الدراسة (يعتمد على المؤقت العالمي) —
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      sliver: SliverToBoxAdapter(
-                        child: ValueListenableBuilder<StudyTimerState>(
-                          valueListenable: studyTimerStore,
-                          builder: (context, timerState, _) {
-                            return _StudyTimerCard(
-                              scheme: scheme,
-                              elapsed: timerState.elapsed,
-                              targetMinutes: timerState.targetMinutes,
-                              isRunning: timerState.isRunning,
-                              startHour: _startHour,
-                              startMinute: _startMinute,
-                              onToggle: studyTimerStore.toggle,
-                              onReset: studyTimerStore.reset,
-                            );
-                          },
-                        ),
-                      ),
-                    ),
                     // تمت إزالة قسم المهام اليومية من هنا ونقله إلى صفحة الخطة.
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -266,23 +236,25 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final first = firstNameFromFullName(profile.fullName);
+    final imageProvider = getProfileImageProvider(profile.profileImageUrl);
     // RTL: first child in Row aligns to the visual right.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        CircleAvatar(
-          radius: 32,
-          backgroundColor: scheme.primaryContainer,
-          backgroundImage: profile.profileImageUrl.isNotEmpty
-              ? CachedNetworkImageProvider(profile.profileImageUrl)
-              : null,
-          child: profile.profileImageUrl.isEmpty
-              ? Icon(
-                  Icons.person_rounded,
-                  size: 36,
-                  color: scheme.onPrimaryContainer,
-                )
-              : null,
+        GestureDetector(
+          onTap: () => ProfileImagePickerSheet.show(context),
+          child: CircleAvatar(
+            radius: 32,
+            backgroundColor: scheme.primaryContainer,
+            backgroundImage: imageProvider,
+            child: imageProvider == null
+                ? Icon(
+                    Icons.person_rounded,
+                    size: 36,
+                    color: scheme.onPrimaryContainer,
+                  )
+                : null,
+          ),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -538,243 +510,5 @@ class _QuickActions extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// بطاقة مؤقت الدراسة
-// ─────────────────────────────────────────────────────────────
-class _StudyTimerCard extends StatelessWidget {
-  const _StudyTimerCard({
-    required this.scheme,
-    required this.elapsed,
-    required this.targetMinutes,
-    required this.isRunning,
-    required this.startHour,
-    required this.startMinute,
-    required this.onToggle,
-    required this.onReset,
-  });
-
-  final ColorScheme scheme;
-  final Duration elapsed;
-  final int targetMinutes;
-  final bool isRunning;
-  final int startHour;
-  final int startMinute;
-  final VoidCallback onToggle;
-  final VoidCallback onReset;
-
-  String _fmt(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
-  }
-
-  String _startTimeLabel() {
-    final h = startHour > 12 ? startHour - 12 : startHour;
-    final m = startMinute.toString().padLeft(2, '0');
-    final period = startHour >= 12 ? 'م' : 'ص';
-    return '$h:$m $period';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final targetDuration = Duration(minutes: targetMinutes);
-    final progress = targetDuration.inSeconds > 0
-        ? (elapsed.inSeconds / targetDuration.inSeconds).clamp(0.0, 1.0)
-        : 0.0;
-    final isDone = elapsed >= targetDuration && targetDuration.inSeconds > 0;
-    final cardColor = isDone
-        ? scheme.tertiaryContainer
-        : scheme.surfaceContainerLow;
-    final accentColor = isDone ? scheme.tertiary : scheme.primary;
-
-    return Card(
-      elevation: 0,
-      color: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Icon(Icons.timer_outlined, color: accentColor, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'مؤقت الدراسة',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.access_time_rounded,
-                          size: 13, color: accentColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        'يبدأ ${_startTimeLabel()}',
-                        style: GoogleFonts.tajawal(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: accentColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                // دائرة التقدم
-                SizedBox(
-                  width: 80,
-                  height: 80,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 80,
-                        height: 80,
-                        child: CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 7,
-                          strokeCap: StrokeCap.round,
-                          backgroundColor:
-                              accentColor.withValues(alpha: 0.15),
-                          color: isDone
-                              ? scheme.tertiary
-                              : accentColor,
-                        ),
-                      ),
-                      if (isDone)
-                        Icon(Icons.check_circle_rounded,
-                            color: scheme.tertiary, size: 32)
-                      else
-                        Text(
-                          _fmt(elapsed),
-                          style: GoogleFonts.tajawal(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: accentColor,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isDone) ...[
-                        Text(
-                          'أحسنت! 🎉 أتممت جلسة الدراسة',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: scheme.onTertiaryContainer,
-                          ),
-                        ),
-                      ] else ...[
-                        Text(
-                          'المدة المستهدفة: ${_fmtMins(targetMinutes)}',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 8,
-                            backgroundColor:
-                                accentColor.withValues(alpha: 0.15),
-                            color: accentColor,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          isRunning
-                              ? 'جلسة الدراسة جارية...'
-                              : 'اضغط للبدء',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 12,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  children: [
-                    FilledButton.tonal(
-                      onPressed: onToggle,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.all(12),
-                        minimumSize: const Size(44, 44),
-                        shape: const CircleBorder(),
-                        backgroundColor:
-                            accentColor.withValues(alpha: 0.15),
-                        foregroundColor: accentColor,
-                      ),
-                      child: Icon(
-                        isRunning
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    IconButton(
-                      onPressed: onReset,
-                      icon: Icon(
-                        Icons.replay_rounded,
-                        size: 18,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      tooltip: 'إعادة تعيين',
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _fmtMins(int mins) {
-    if (mins < 60) return '$mins دقيقة';
-    final h = mins ~/ 60;
-    final m = mins % 60;
-    if (m == 0) {
-      if (h == 1) return 'ساعة';
-      if (h == 2) return 'ساعتان';
-      return '$h ساعات';
-    }
-    return '$h س $m د';
-  }
-}
-
 // تمت إزالة الكلاسات الخاصة بقسم مهام اليوم ونقلها بالكامل إلى plan_screen.dart.
+

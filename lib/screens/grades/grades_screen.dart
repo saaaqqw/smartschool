@@ -298,7 +298,7 @@ class _GradesScreenState extends State<GradesScreen>
                     crossAxisCount: 3,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.82,
+                    childAspectRatio: 0.65,
                   ),
                 ),
               ),
@@ -433,7 +433,7 @@ class _GradesScreenState extends State<GradesScreen>
           backgroundColor: scheme.surfaceContainerHigh,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -808,87 +808,90 @@ class _SubjectCircleCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // الدائرة المخصصة
-              SizedBox(
-                width: 72,
-                height: 72,
-                child: CustomPaint(
-                  painter: _CircleProgressPainter(
-                    progress: entry.ratio,
-                    color: entry.color,
-                    bgColor: entry.color.withValues(alpha: 0.1),
-                    strokeWidth: 7,
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: entry.color.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        entry.icon,
-                        color: entry.color,
-                        size: 22,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // الدائرة المخصصة
+                SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: CustomPaint(
+                    painter: _CircleProgressPainter(
+                      progress: entry.ratio,
+                      color: entry.color,
+                      bgColor: entry.color.withValues(alpha: 0.1),
+                      strokeWidth: 7,
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: entry.color.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          entry.icon,
+                          color: entry.color,
+                          size: 22,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                entry.subject,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.tajawal(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${entry.percent}%',
-                style: GoogleFonts.tajawal(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  color: entry.color,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: entry.ratingColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  entry.rating,
+                const SizedBox(height: 10),
+                Text(
+                  entry.subject,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.tajawal(
-                    fontSize: 9.5,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w700,
-                    color: entry.ratingColor,
+                    color: scheme.onSurface,
+                    height: 1.2,
                   ),
                 ),
-              ),
-              if (entry.needsImprovement)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Icon(
-                    Icons.warning_amber_rounded,
-                    size: 14,
-                    color: entry.ratingColor.withValues(alpha: 0.7),
+                const SizedBox(height: 4),
+                Text(
+                  '${entry.percent}%',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: entry.color,
                   ),
                 ),
-            ],
+                const SizedBox(height: 2),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: entry.ratingColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    entry.rating,
+                    style: GoogleFonts.tajawal(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: entry.ratingColor,
+                    ),
+                  ),
+                ),
+                if (entry.needsImprovement)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      size: 14,
+                      color: entry.ratingColor.withValues(alpha: 0.7),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

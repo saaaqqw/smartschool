@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/locale/locale_notifier.dart';
 import '../../core/theme/theme_notifier.dart';
@@ -14,6 +13,9 @@ import 'developer_dashboard_screen.dart';
 import '../reports/parent_report_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/developer_auth_service.dart';
+
+import '../../core/stores/study_timer_store.dart';
+import '../../widgets/profile_image_picker_sheet.dart';
 
 const double _kSettingsCardRadius = 20;
 
@@ -158,6 +160,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _showLanguageSheet(context),
                 ),
                 _divider(scheme),
+                ValueListenableBuilder<StudyTimerState>(
+                  valueListenable: studyTimerStore,
+                  builder: (context, timerState, _) {
+                    return _SwitchTile(
+                      icon: Icons.timer_outlined,
+                      label: 'إظهار العداد العائم للمذاكرة (2+ ساعات)',
+                      value: !timerState.isOverlayHidden,
+                      onChanged: (v) {
+                        if (v) {
+                          studyTimerStore.showOverlay();
+                          _toast(context, 'تم إظهار العداد العائم');
+                        } else {
+                          studyTimerStore.hideOverlay();
+                          _toast(context, 'تم إخفاء العداد العائم');
+                        }
+                      },
+                    );
+                  },
+                ),
+                _divider(scheme),
                 _ChevronTile(
                   icon: Icons.event_note_rounded,
                   label: 'الخطة الدراسية',
@@ -259,64 +281,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // تمت إزالة منطق الخطة والجدول الأسبوعي من هنا ونقله إلى StudyPlanScreen.
 
   Widget _buildProfileHeader(BuildContext context, ColorScheme scheme) {
-    final profile = userProfileNotifier.value;
     return Column(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: scheme.primary.withValues(alpha: 0.22),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
+        ValueListenableBuilder<UserProfile>(
+          valueListenable: userProfileNotifier,
+          builder: (context, profile, _) {
+            final imageProvider = getProfileImageProvider(profile.profileImageUrl);
+            return Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: scheme.primary.withValues(alpha: 0.22),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CircleAvatar(
-                radius: 52,
-                backgroundColor: scheme.primaryContainer,
-                backgroundImage: profile.profileImageUrl.isNotEmpty
-                    ? CachedNetworkImageProvider(profile.profileImageUrl)
-                    : null,
-                child: profile.profileImageUrl.isEmpty
-                    ? Icon(
-                        Icons.person_rounded,
-                        size: 56,
-                        color: scheme.onPrimaryContainer,
-                      )
-                    : null,
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Material(
-                  color: scheme.primary,
-                  elevation: 3,
-                  shadowColor: scheme.shadow.withValues(alpha: 0.35),
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).push(
-                      RegisterScreen.route(isEditMode: true),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  GestureDetector(
+                    onTap: () => ProfileImagePickerSheet.show(context),
+                    child: CircleAvatar(
+                      radius: 52,
+                      backgroundColor: scheme.primaryContainer,
+                      backgroundImage: imageProvider,
+                      child: imageProvider == null
+                          ? Icon(
+                              Icons.person_rounded,
+                              size: 56,
+                              color: scheme.onPrimaryContainer,
+                            )
+                          : null,
                     ),
-                    child: SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: Icon(
-                        Icons.photo_camera_rounded,
-                        size: 18,
-                        color: scheme.onPrimary,
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Material(
+                      color: scheme.primary,
+                      elevation: 3,
+                      shadowColor: scheme.shadow.withValues(alpha: 0.35),
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => ProfileImagePickerSheet.show(context),
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Icon(
+                            Icons.photo_camera_rounded,
+                            size: 18,
+                            color: scheme.onPrimary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
         const SizedBox(height: 18),
         ValueListenableBuilder<UserProfile>(
@@ -515,6 +541,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showModalBottomSheet<void>(
       context: parentContext,
       showDragHandle: true,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -525,7 +552,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isArabic = currentLocale.languageCode == 'ar';
 
             return SafeArea(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -618,65 +645,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'هذه المنطقة مخصصة لإدارة المواد والأسئلة. يرجى إدخال رمز الأمان للمتابعة:',
-              style: GoogleFonts.tajawal(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            ValueListenableBuilder<bool>(
-              valueListenable: obscureNotifier,
-              builder: (context, obscure, _) {
-                return TextField(
-                  controller: pinController,
-                  obscureText: obscure,
-                  keyboardType: TextInputType.number,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: 'رمز أمان المطور (PIN)',
-                    labelStyle: GoogleFonts.tajawal(),
-                    prefixIcon: const Icon(Icons.lock_rounded),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-                      onPressed: () => obscureNotifier.value = !obscure,
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  style: GoogleFonts.tajawal(fontSize: 18, letterSpacing: 4, fontWeight: FontWeight.bold),
-                  onSubmitted: (_) => _verifyAndEnterDeveloper(ctx, pinController.text, errorNotifier),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            ValueListenableBuilder<String>(
-              valueListenable: errorNotifier,
-              builder: (context, errorText, _) {
-                if (errorText.isEmpty) return const SizedBox.shrink();
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline_rounded, color: Colors.red, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          errorText,
-                          style: GoogleFonts.tajawal(color: Colors.red.shade700, fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'هذه المنطقة مخصصة لإدارة المواد والأسئلة. يرجى إدخال رمز الأمان للمتابعة:',
+                style: GoogleFonts.tajawal(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              ValueListenableBuilder<bool>(
+                valueListenable: obscureNotifier,
+                builder: (context, obscure, _) {
+                  return TextField(
+                    controller: pinController,
+                    obscureText: obscure,
+                    keyboardType: TextInputType.number,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'رمز أمان المطور (PIN)',
+                      labelStyle: GoogleFonts.tajawal(),
+                      prefixIcon: const Icon(Icons.lock_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                        onPressed: () => obscureNotifier.value = !obscure,
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    style: GoogleFonts.tajawal(fontSize: 18, letterSpacing: 4, fontWeight: FontWeight.bold),
+                    onSubmitted: (_) => _verifyAndEnterDeveloper(ctx, pinController.text, errorNotifier),
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              ValueListenableBuilder<String>(
+                valueListenable: errorNotifier,
+                builder: (context, errorText, _) {
+                  if (errorText.isEmpty) return const SizedBox.shrink();
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline_rounded, color: Colors.red, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            errorText,
+                            style: GoogleFonts.tajawal(color: Colors.red.shade700, fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(

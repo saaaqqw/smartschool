@@ -76,7 +76,58 @@ const int _kQuizLimit = 10;
 class _LessonDetailScreenState extends State<LessonDetailScreen> {
   final _firebaseService = FirebaseService();
   final _lessonSvc = LessonService();
+  final GlobalKey<State<StatefulWidget>> _playerKey = GlobalKey<State<StatefulWidget>>();
   bool _isUpdating = false;
+  bool _isVideoFullScreen = false;
+  Map<String, dynamic>? _summaryData;
+  List<QuizQuestionModel> _cachedQuestions = [];
+  double _cachedPrevBest = 0.0;
+  bool _localCompleted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  void _onFullScreenChanged(bool isFull) {
+    if (mounted && _isVideoFullScreen != isFull) {
+      setState(() => _isVideoFullScreen = isFull);
+    }
+  }
+
+  Future<void> _loadInitialData() async {
+    final summary = await _fetchSummaryFromFirestore();
+    List<QuizQuestionModel> questions = [];
+    double prevBest = 0.0;
+
+    if (widget.subjectDocId.isNotEmpty) {
+      try {
+        questions = await _lessonSvc.fetchRandomizedQuestions(
+          subjectId: widget.subjectDocId,
+          lessonId: _lessonDocId,
+          limit: _kQuizLimit,
+        );
+        if (questions.isNotEmpty) {
+          prevBest = await _lessonSvc.fetchLessonGrade(
+            subjectId: widget.subjectDocId,
+            lessonId: _lessonDocId,
+          );
+        }
+        if (questions.isEmpty) {
+          questions = await _fetchQuestionsLegacy();
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      setState(() {
+        if (summary != null) _summaryData = summary;
+        _cachedQuestions = questions;
+        _cachedPrevBest = prevBest;
+      });
+    }
+  }
 
   /// معرّف الدرس النهائي (يُحسب إذا لم يُمرَّر)
   String get _lessonDocId =>
@@ -84,49 +135,127 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           ? widget.lessonDocId
           : 'lesson_${widget.lessonNumber}';
 
-  /// ─── المنطق الرئيسي عند "أكملت الدرس" ─────────────────────
-  /// 1. يجلب الأسئلة وأعلى درجة سابقة.
-  /// 2. يجلب ملخص الدرس تلقائياً من Firestore (إن وجد).
-  /// 3. يعرض ملخص الدرس في نافذة منبثقة (Dialog) أنيقة، ثم يتابع للاختبار أو حفظ التقدم.
-  Future<void> _onLessonComplete() async {
+  /// ─── المنطق الرئيسي عند "أكملت الدرس" / "الانتقال لاختبار الدرس" ─────────
+  Future<void> _onLessonComplete(bool isLessonCompletedPermanently) async {
     final uid = userProfileNotifier.value.uid;
     if (uid.isEmpty) return;
+
+    // إذا كان الدرس مكتملاً بالفعل أو تم الضغط على زر الانتقال المباشر للأسئلة
+    if (isLessonCompletedPermanently) {
+      if (_cachedQuestions.isNotEmpty) {
+        Navigator.of(context).push(
+          QuickQuizScreen.route(
+            subject: widget.subject,
+            unit: widget.unit,
+            lessonNumber: widget.lessonNumber,
+            questions: _cachedQuestions,
+            subjectDocId: widget.subjectDocId,
+            lessonDocId: _lessonDocId,
+            previousBestScore: _cachedPrevBest,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'تم إتمام هذا الدرس بنجاح، ولا توجد أسئلة اختبار مسجلة عليه حالياً. ✅',
+              style: GoogleFonts.tajawal(),
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    // أول مرة يكمل فيها الطالب الدرس:
     setState(() => _isUpdating = true);
 
     try {
-      List<QuizQuestionModel> questions = [];
-      double prevBest = 0.0;
-
-      if (widget.subjectDocId.isNotEmpty) {
-        // ── جلب الأسئلة من subcollection (مع خلط + تحديد) ──────
-        questions = await _lessonSvc.fetchRandomizedQuestions(
+      if (_cachedQuestions.isEmpty && widget.subjectDocId.isNotEmpty) {
+        _cachedQuestions = await _lessonSvc.fetchRandomizedQuestions(
           subjectId: widget.subjectDocId,
           lessonId: _lessonDocId,
           limit: _kQuizLimit,
         );
-
-        // ── قراءة أعلى درجة سابقة ───────────────────────────────
-        if (questions.isNotEmpty) {
-          prevBest = await _lessonSvc.fetchLessonGrade(
-            subjectId: widget.subjectDocId,
-            lessonId: _lessonDocId,
-          );
-        }
-
-        // ── Fallback: البحث في المسار القديم (units/.../lessons) ─
-        if (questions.isEmpty) {
-          questions = await _fetchQuestionsLegacy();
+        if (_cachedQuestions.isEmpty) {
+          _cachedQuestions = await _fetchQuestionsLegacy();
         }
       }
+      _summaryData ??= await _fetchSummaryFromFirestore();
 
-      // ── جلب ملخص الدرس من Firestore ─────────────────────────────
-      final summaryData = await _fetchSummaryFromFirestore();
+      await _firebaseService.updateUnitProgress(
+        uid,
+        widget.subject.title,
+        widget.unit.title,
+        1.0,
+      );
+
+      int maxLessons = 5;
+      try {
+        final snap = await _lessonSvc.fetchLessonsForUnit(
+          subjectId: widget.subjectDocId,
+          unitIndex: widget.unitIndex,
+        );
+        if (snap.isNotEmpty) maxLessons = snap.length;
+      } catch (_) {}
+
+      final currentSemester = userProfileNotifier.value.semester;
+      await _firebaseService.advanceLessonProgress(
+        uid: uid,
+        subjectTitle: widget.subject.title,
+        currentUnitIndex: widget.unitIndex,
+        currentLessonNumber: widget.lessonNumber,
+        maxLessonsInUnit: maxLessons,
+        maxUnits: widget.subject.units.length,
+        semester: currentSemester,
+      );
+
+      FirebaseSyncService.incrementLessonsCompleted(
+          uid, widget.subject.title, semester: currentSemester).ignore();
 
       if (!mounted) return;
-      setState(() => _isUpdating = false);
+      setState(() {
+        _isUpdating = false;
+        _localCompleted = true;
+      });
 
-      // إظهار نافذة الملخص المنبثقة للطالب أولاً
-      _showLessonSummaryDialog(summaryData, questions, prevBest, uid);
+      // إذا كان هناك أسئلة ننتقل إليها مباشرة دون فتح نافذة منبثقة للملخص
+      if (_cachedQuestions.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'تم حفظ تقدمك بنجاح! جاري الانتقال لاختبار الدرس... ✅',
+              style: GoogleFonts.tajawal(),
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.of(context).push(
+          QuickQuizScreen.route(
+            subject: widget.subject,
+            unit: widget.unit,
+            lessonNumber: widget.lessonNumber,
+            questions: _cachedQuestions,
+            subjectDocId: widget.subjectDocId,
+            lessonDocId: _lessonDocId,
+            previousBestScore: _cachedPrevBest,
+          ),
+        );
+      } else if (_summaryData != null) {
+        // في حالة عدم وجود أسئلة ولكن يوجد ملخص، نعرضه للمرة الأولى فقط
+        _showLessonSummaryDialog(_summaryData, _cachedQuestions, _cachedPrevBest, uid);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'تم تحديد الدرس ${widget.lessonNumber} كمكتمل! ✅',
+              style: GoogleFonts.tajawal(),
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -418,9 +547,28 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   // ─── واجهة الصفحة ────────────────────────────────────────────
+  // ─── واجهة الصفحة ────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final uid = userProfileNotifier.value.uid;
+    final currentSemester = userProfileNotifier.value.semester;
+
+    if (_isVideoFullScreen) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: SizedBox.expand(
+          child: YoutubeLessonPlayer(
+            key: _playerKey,
+            videoId: widget.videoId,
+            autoPlay: false,
+            subjectColor: widget.subject.color,
+            lessonTitle: 'الدرس ${widget.lessonNumber} — ${widget.unit.title}',
+            onFullScreenChange: _onFullScreenChanged,
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -442,102 +590,160 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         },
         child: const Icon(Icons.auto_awesome_rounded),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // ── بطاقة المعلومات ──────────────────────────────────────
-          Card(
-            color: widget.subject.color.withValues(alpha: 0.12),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.subject.title,
-                    style: GoogleFonts.tajawal(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: widget.subject.color,
-                    ),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: uid.isNotEmpty
+            ? _firebaseService.getProgressStream(
+                uid,
+                widget.subject.title,
+                semester: currentSemester,
+              )
+            : const Stream.empty(),
+        builder: (context, snapshot) {
+          bool isCompletedInFirestore = false;
+          if (snapshot.hasData &&
+              snapshot.data != null &&
+              snapshot.data!.exists) {
+            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+            final currentUnitIdx = data['currentUnitIndex'] as int? ?? 0;
+            final currentLessonNum = data['currentLessonNumber'] as int? ?? 1;
+            final completedSet = data['completed_lessons_set'] as List? ?? [];
+
+            if (completedSet
+                .contains('u${widget.unitIndex}_l${widget.lessonNumber}')) {
+              isCompletedInFirestore = true;
+            } else if (currentUnitIdx > widget.unitIndex ||
+                (currentUnitIdx == widget.unitIndex &&
+                    currentLessonNum > widget.lessonNumber)) {
+              isCompletedInFirestore = true;
+            }
+          }
+
+          final bool isLessonCompletedPermanently =
+              isCompletedInFirestore || _localCompleted;
+
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // ── بطاقة المعلومات ──────────────────────────────────────
+              Card(
+                color: widget.subject.color.withValues(alpha: 0.12),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.subject.title,
+                        style: GoogleFonts.tajawal(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: widget.subject.color,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.unit.title,
+                        style: GoogleFonts.tajawal(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'شاهد الدرس ثم أكمل الاختبار.',
+                        style: GoogleFonts.tajawal(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.unit.title,
-                    style: GoogleFonts.tajawal(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: scheme.onSurface,
-                      height: 1.25,
-                    ),
+                ),
+              ),
+
+              // ── عرض أعلى درجة سابقة ──────────────────────────────────
+              if (widget.subjectDocId.isNotEmpty)
+                _BestScoreBanner(
+                  subjectDocId: widget.subjectDocId,
+                  lessonDocId: _lessonDocId,
+                  color: widget.subject.color,
+                  scheme: scheme,
+                  lessonSvc: _lessonSvc,
+                ),
+
+              const SizedBox(height: 18),
+
+              // ── الفيديو بالـ Smart Cinema Container ──────────────────
+              YoutubeLessonPlayer(
+                key: _playerKey,
+                videoId: widget.videoId,
+                autoPlay: false,
+                subjectColor: widget.subject.color,
+                lessonTitle: 'الدرس ${widget.lessonNumber} — ${widget.unit.title}',
+                onFullScreenChange: _onFullScreenChanged,
+              ),
+
+              const SizedBox(height: 18),
+
+              // ── بطاقة الملخص الدائمة تحت الفيديو عند اكتمال الدرس ──────────
+              if (isLessonCompletedPermanently && _summaryData != null) ...[
+                _LessonSummaryCard(
+                  summaryData: _summaryData!,
+                  subjectColor: widget.subject.color,
+                ),
+                const SizedBox(height: 18),
+              ],
+
+              // ── زر "أكملت الدرس" / "الانتقال لاختبار الدرس" ─────────────
+              FilledButton.icon(
+                onPressed: _isUpdating
+                    ? null
+                    : () => _onLessonComplete(isLessonCompletedPermanently),
+                icon: _isUpdating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        isLessonCompletedPermanently
+                            ? (_cachedQuestions.isNotEmpty
+                                ? Icons.quiz_rounded
+                                : Icons.check_circle_rounded)
+                            : Icons.check_circle_outline_rounded,
+                      ),
+                label: Text(
+                  isLessonCompletedPermanently
+                      ? (_cachedQuestions.isNotEmpty
+                          ? 'الانتقال لاختبار الدرس (الأسئلة) 📝'
+                          : 'الدرس مكتمل (لا توجد أسئلة) ✅')
+                      : 'أكملت الدرس',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'شاهد الدرس ثم أكمل الاختبار.',
-                    style: GoogleFonts.tajawal(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: widget.subject.color,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-
-          // ── عرض أعلى درجة سابقة ──────────────────────────────────
-          if (widget.subjectDocId.isNotEmpty)
-            _BestScoreBanner(
-              subjectDocId: widget.subjectDocId,
-              lessonDocId: _lessonDocId,
-              color: widget.subject.color,
-              scheme: scheme,
-              lessonSvc: _lessonSvc,
-            ),
-
-          const SizedBox(height: 18),
-
-          // ── الفيديو ──────────────────────────────────────────────
-          YoutubeLessonPlayer(
-            videoId: widget.videoId,
-            autoPlay: false,
-          ),
-
-          const SizedBox(height: 18),
-
-          // ── زر "أكملت الدرس" ─────────────────────────────────────
-          FilledButton.icon(
-            onPressed: _isUpdating ? null : _onLessonComplete,
-            icon: _isUpdating
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.check_circle_outline_rounded),
-            label: Text(
-              'أكملت الدرس',
-              style: GoogleFonts.tajawal(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: widget.subject.color,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -604,6 +810,140 @@ class _BestScoreBanner extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// بطاقة ملخص الدرس الدائم تحت الفيديو
+// ═══════════════════════════════════════════════════════════════
+class _LessonSummaryCard extends StatelessWidget {
+  const _LessonSummaryCard({
+    required this.summaryData,
+    required this.subjectColor,
+  });
+
+  final Map<String, dynamic> summaryData;
+  final Color subjectColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final title = summaryData['summaryTitle'] ??
+        summaryData['title'] ??
+        'ملخص وأهم نقاط الدرس';
+    final content = summaryData['summaryContent'] ??
+        summaryData['content'] ??
+        'تم إكمال مشاهدة الفيديو بنجاح.';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            subjectColor.withValues(alpha: 0.16),
+            subjectColor.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: subjectColor.withValues(alpha: 0.45),
+          width: 1.6,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: subjectColor.withValues(alpha: 0.09),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: subjectColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: subjectColor.withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.auto_stories_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title.toString(),
+                      style: GoogleFonts.tajawal(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.verified_rounded,
+                          color: Colors.green.shade600,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'درس منجز — الملخص معروض بصفة دائمة',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: subjectColor.withValues(alpha: 0.22),
+              ),
+            ),
+            child: Text(
+              content.toString(),
+              style: GoogleFonts.tajawal(
+                fontSize: 14.5,
+                height: 1.75,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface.withValues(alpha: 0.9),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

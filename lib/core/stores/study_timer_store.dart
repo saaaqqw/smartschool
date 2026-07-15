@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 /// ──────────────────────────────────────────────────────────────
@@ -9,11 +10,13 @@ class StudyTimerState {
     this.elapsed = Duration.zero,
     this.targetMinutes = 120,
     this.isRunning = false,
+    this.isOverlayHidden = false,
   });
 
   final Duration elapsed;
   final int targetMinutes;
   final bool isRunning;
+  final bool isOverlayHidden;
 
   bool get isDone =>
       targetMinutes > 0 && elapsed.inMinutes >= targetMinutes;
@@ -28,11 +31,13 @@ class StudyTimerState {
     Duration? elapsed,
     int? targetMinutes,
     bool? isRunning,
+    bool? isOverlayHidden,
   }) {
     return StudyTimerState(
       elapsed: elapsed ?? this.elapsed,
       targetMinutes: targetMinutes ?? this.targetMinutes,
       isRunning: isRunning ?? this.isRunning,
+      isOverlayHidden: isOverlayHidden ?? this.isOverlayHidden,
     );
   }
 }
@@ -51,9 +56,22 @@ class StudyTimerStore extends ValueNotifier<StudyTimerState> {
   void Function(Duration elapsed, int targetMinutes, bool isRunning)?
       onStateChanged;
 
-  /// تعيين المدة المستهدفة (بالدقائق) دون إعادة تعيين المؤقت
+  /// تعيين المدة المستهدفة (بالدقائق) بحيث لا تقل أبداً عن 2 ساعات (120 دقيقة)
   void setTarget(int minutes) {
-    value = value.copyWith(targetMinutes: minutes);
+    final clamped = math.max(120, minutes);
+    value = value.copyWith(targetMinutes: clamped);
+    _notifyChange();
+  }
+
+  /// إظهار العداد العائم على الشاشة
+  void showOverlay() {
+    value = value.copyWith(isOverlayHidden: false);
+    _notifyChange();
+  }
+
+  /// إخفاء العداد العائم من الشاشة
+  void hideOverlay() {
+    value = value.copyWith(isOverlayHidden: true);
     _notifyChange();
   }
 

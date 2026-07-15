@@ -109,6 +109,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -125,7 +126,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
           (240, 'أربع ساعات'),
         ];
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,

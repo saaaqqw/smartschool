@@ -80,132 +80,139 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
             progressData = data?['unitProgress'] as Map<String, dynamic>? ?? {};
           }
 
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar.large(
-                pinned: true,
-                backgroundColor: widget.subject.color.withValues(alpha: 0.12),
-                surfaceTintColor: widget.subject.color.withValues(alpha: 0.3),
-                leading: IconButton(
-                  icon: Icon(Icons.arrow_forward_rounded,
-                      color: scheme.onSurface),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                title: Text(
-                  widget.subject.title,
-                  style: GoogleFonts.tajawal(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 22,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Align(
-                    alignment: const Alignment(-0.85, 0.25),
-                    child: Hero(
-                      tag: 'subject_icon_${widget.subject.title}',
-                      child: Material(
-                        color: widget.subject.color.withValues(alpha: 0.22),
-                        shape: const CircleBorder(),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Icon(
-                            widget.subject.icon,
-                            size: 36,
-                            color: widget.subject.color,
+          return StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('subjects')
+                .doc(subjectDocId)
+                .snapshots(),
+            builder: (context, subjSnap) {
+              List<CurriculumUnit> displayUnits = widget.subject.units;
+              String bookUrl = '';
+              String bookTitle = '';
+
+              if (subjSnap.hasData &&
+                  subjSnap.data != null &&
+                  subjSnap.data!.exists) {
+                final data =
+                    subjSnap.data!.data() as Map<String, dynamic>?;
+                if (data != null) {
+                  bookUrl = data['bookUrl'] as String? ?? '';
+                  bookTitle = data['bookTitle'] as String? ?? '';
+
+                  if (data['units'] is List) {
+                    final unitsRaw = data['units'] as List;
+                    if (unitsRaw.isNotEmpty) {
+                      displayUnits = unitsRaw.asMap().entries.map((e) {
+                        final map = e.value as Map? ?? {};
+                        final title = map['title'] as String? ??
+                            'الوحدة ${e.key + 1}';
+                        return CurriculumUnit(
+                          title: title,
+                          icon: widget.subject.icon,
+                          progress: 0.0,
+                        );
+                      }).toList();
+                    }
+                  }
+                }
+              }
+
+              return CustomScrollView(
+                slivers: [
+                  SliverAppBar.large(
+                    pinned: true,
+                    backgroundColor: widget.subject.color.withValues(alpha: 0.12),
+                    surfaceTintColor: widget.subject.color.withValues(alpha: 0.3),
+                    leading: IconButton(
+                      icon: Icon(Icons.arrow_forward_rounded,
+                          color: scheme.onSurface),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                    title: Text(
+                      widget.subject.title,
+                      style: GoogleFonts.tajawal(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Stack(
+                        children: [
+                          // شعار المادة في الجهة اليسرى (-0.85)
+                          Align(
+                            alignment: const Alignment(-0.85, 0.25),
+                            child: Hero(
+                              tag: 'subject_icon_${widget.subject.title}',
+                              child: Material(
+                                color: widget.subject.color.withValues(alpha: 0.22),
+                                shape: const CircleBorder(),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Icon(
+                                    widget.subject.icon,
+                                    size: 36,
+                                    color: widget.subject.color,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          // أيقونة الكتاب على شكل مجلد كتاب في الجهة اليمنى مقابل شعار المادة (+0.85)
+                          if (bookUrl.isNotEmpty)
+                            Align(
+                              alignment: const Alignment(0.85, 0.25),
+                              child: _HeaderBookBadge(
+                                subjectColor: widget.subject.color,
+                                bookTitle: bookTitle.isEmpty
+                                    ? 'الكتاب المدرسي'
+                                    : bookTitle,
+                                onTap: () => _showBookOptionsSheet(
+                                  context,
+                                  bookUrl,
+                                  bookTitle,
+                                  widget.subject,
+                                  semester,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              ),
-              StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('subjects')
-                    .doc(subjectDocId)
-                    .snapshots(),
-                builder: (context, subjSnap) {
-                  List<CurriculumUnit> displayUnits = widget.subject.units;
-                  String bookUrl = '';
-                  String bookTitle = '';
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    sliver: SliverList.separated(
+                      itemCount: displayUnits.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final unit = displayUnits[index];
+                        final firestoreProgress =
+                            progressData[unit.title] as double?;
+                        final currentProgress =
+                            firestoreProgress ?? unit.progress;
 
-                  if (subjSnap.hasData &&
-                      subjSnap.data != null &&
-                      subjSnap.data!.exists) {
-                    final data =
-                        subjSnap.data!.data() as Map<String, dynamic>?;
-                    if (data != null) {
-                      bookUrl = data['bookUrl'] as String? ?? '';
-                      bookTitle = data['bookTitle'] as String? ?? '';
-
-                      if (data['units'] is List) {
-                        final unitsRaw = data['units'] as List;
-                        if (unitsRaw.isNotEmpty) {
-                          displayUnits = unitsRaw.asMap().entries.map((e) {
-                            final map = e.value as Map? ?? {};
-                            final title = map['title'] as String? ??
-                                'الوحدة ${e.key + 1}';
-                            return CurriculumUnit(
-                              title: title,
-                              icon: widget.subject.icon,
-                              progress: 0.0,
-                            );
-                          }).toList();
-                        }
-                      }
-                    }
-                  }
-
-                  return SliverMainAxisGroup(
-                    slivers: [
-                      if (bookUrl.isNotEmpty)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                            child: _BookHeroCard(
-                              subject: widget.subject,
-                              semester: semester,
-                              bookTitle: bookTitle,
-                              bookUrl: bookUrl,
-                            ),
-                          ),
-                        ),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                        sliver: SliverList.separated(
-                          itemCount: displayUnits.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final unit = displayUnits[index];
-                            final firestoreProgress =
-                                progressData[unit.title] as double?;
-                            final currentProgress =
-                                firestoreProgress ?? unit.progress;
-
-                            return _UnitCard(
-                              subject: widget.subject,
-                              unit: unit,
-                              index: index,
-                              actualProgress: currentProgress,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  UnitDetailScreen.route(
-                                    subject: widget.subject,
-                                    unit: unit,
-                                    unitIndex: index,
-                                  ),
-                                );
-                              },
+                        return _UnitCard(
+                          subject: widget.subject,
+                          unit: unit,
+                          index: index,
+                          actualProgress: currentProgress,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              UnitDetailScreen.route(
+                                subject: widget.subject,
+                                unit: unit,
+                                unitIndex: index,
+                              ),
                             );
                           },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),
@@ -337,215 +344,285 @@ class _UnitCard extends StatelessWidget {
   }
 }
 
-class _BookHeroCard extends StatelessWidget {
-  const _BookHeroCard({
-    required this.subject,
-    required this.semester,
+class _HeaderBookBadge extends StatelessWidget {
+  const _HeaderBookBadge({
+    required this.subjectColor,
     required this.bookTitle,
-    required this.bookUrl,
+    required this.onTap,
   });
 
-  final SchoolSubject subject;
-  final String semester;
+  final Color subjectColor;
   final String bookTitle;
-  final String bookUrl;
-
-  String _convertDriveToDownloadUrl(String url) {
-    final fileIdRegExp = RegExp(r'/file/d/([a-zA-Z0-9_-]+)');
-    final idRegExp = RegExp(r'[?&]id=([a-zA-Z0-9_-]+)');
-
-    String? fileId;
-    final fileMatch = fileIdRegExp.firstMatch(url);
-    if (fileMatch != null && fileMatch.groupCount >= 1) {
-      fileId = fileMatch.group(1);
-    } else {
-      final idMatch = idRegExp.firstMatch(url);
-      if (idMatch != null && idMatch.groupCount >= 1) {
-        fileId = idMatch.group(1);
-      }
-    }
-
-    if (fileId != null && fileId.isNotEmpty) {
-      return 'https://drive.google.com/uc?export=download&id=$fileId';
-    }
-    return url;
-  }
-
-  Future<void> _viewBook(BuildContext context) async {
-    final uri = Uri.parse(bookUrl);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تعذر فتح رابط تصفح الكتاب.')),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء فتح الرابط: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _downloadBook(BuildContext context) async {
-    final downloadUrl = _convertDriveToDownloadUrl(bookUrl);
-    final uri = Uri.parse(downloadUrl);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تعذر بدء تحميل الكتاب.')),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء محاولة التحميل: $e')),
-        );
-      }
-    }
-  }
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            subject.color.withValues(alpha: 0.16),
-            subject.color.withValues(alpha: 0.05),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 66,
+        height: 72,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              subjectColor,
+              subjectColor.withValues(alpha: 0.8),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+            topLeft: Radius.circular(5),
+            bottomLeft: Radius.circular(5),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: subjectColor.withValues(alpha: 0.38),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
           ],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
         ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: subject.color.withValues(alpha: 0.35),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: subject.color.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
+        child: Stack(
+          children: [
+            // كعب الكتاب (Spine Detail)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              child: Container(
                 decoration: BoxDecoration(
-                  color: subject.color,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: subject.color.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.menu_book_rounded,
-                  color: Colors.white,
-                  size: 26,
+                  color: Colors.white.withValues(alpha: 0.28),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(5),
+                    bottomLeft: Radius.circular(5),
+                  ),
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      bookTitle.isNotEmpty
-                          ? bookTitle
-                          : 'الكتاب الدراسي المعتمد — $semester',
-                      style: GoogleFonts.tajawal(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w800,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'متاح للقراءة السحابية المباشرة أو التحميل للمشاهدة بدون إنترنت عبر Google Drive',
-                      style: GoogleFonts.tajawal(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            // خط زخرفي إضافي للكعب
+            Positioned(
+              left: 10,
+              top: 0,
+              bottom: 0,
+              width: 1,
+              child: Container(
+                color: Colors.white.withValues(alpha: 0.2),
               ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _viewBook(context),
-                  icon: const Icon(Icons.visibility_rounded, size: 20),
-                  label: Text(
-                    'تصفح الكتاب',
+            ),
+            // محتوى الكتاب (أيقونة + نص صغير)
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.menu_book_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'الكتاب',
                     style: GoogleFonts.tajawal(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14.5,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
                     ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: subject.color,
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _downloadBook(context),
-                  icon: const Icon(Icons.download_rounded, size: 20),
-                  label: Text(
-                    'تحميل (PDF)',
-                    style: GoogleFonts.tajawal(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: subject.color,
-                    side: BorderSide(color: subject.color, width: 1.8),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+String _convertDriveToDownloadUrl(String url) {
+  final fileIdRegExp = RegExp(r'/file/d/([a-zA-Z0-9_-]+)');
+  final idRegExp = RegExp(r'[?&]id=([a-zA-Z0-9_-]+)');
+
+  String? fileId;
+  final fileMatch = fileIdRegExp.firstMatch(url);
+  if (fileMatch != null && fileMatch.groupCount >= 1) {
+    fileId = fileMatch.group(1);
+  } else {
+    final idMatch = idRegExp.firstMatch(url);
+    if (idMatch != null && idMatch.groupCount >= 1) {
+      fileId = idMatch.group(1);
+    }
+  }
+
+  if (fileId != null && fileId.isNotEmpty) {
+    return 'https://drive.google.com/uc?export=download&id=$fileId';
+  }
+  return url;
+}
+
+Future<void> _launchUrlHelper(BuildContext context, String url) async {
+  final uri = Uri.parse(url);
+  try {
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر فتح الرابط.')),
+        );
+      }
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ أثناء محاولة فتح الرابط: $e')),
+      );
+    }
+  }
+}
+
+void _showBookOptionsSheet(
+  BuildContext context,
+  String bookUrl,
+  String bookTitle,
+  SchoolSubject subject,
+  String semester,
+) {
+  final scheme = Theme.of(context).colorScheme;
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: scheme.surfaceContainerHigh,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (ctx) {
+      return SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: subject.color,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: subject.color.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.menu_book_rounded,
+                        color: Colors.white, size: 30),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bookTitle.isNotEmpty
+                              ? bookTitle
+                              : 'الكتاب الدراسي المعتمد — $semester',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 17.5,
+                            fontWeight: FontWeight.w800,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'متاح للقراءة السحابية المباشرة أو التحميل للمشاهدة بدون إنترنت عبر Google Drive',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _launchUrlHelper(context, bookUrl);
+                      },
+                      icon: const Icon(Icons.visibility_rounded, size: 20),
+                      label: Text(
+                        'تصفح الكتاب',
+                        style: GoogleFonts.tajawal(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: subject.color,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        final downloadUrl = _convertDriveToDownloadUrl(bookUrl);
+                        _launchUrlHelper(context, downloadUrl);
+                      },
+                      icon: const Icon(Icons.download_rounded, size: 20),
+                      label: Text(
+                        'تحميل (PDF)',
+                        style: GoogleFonts.tajawal(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: subject.color,
+                        side: BorderSide(color: subject.color, width: 1.8),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }

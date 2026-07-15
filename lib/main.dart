@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,6 +16,7 @@ import 'core/stores/user_profile_store.dart';
 import 'core/stores/study_timer_store.dart';
 import 'services/firebase_sync_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'widgets/global_study_timer_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +57,8 @@ Future<void> _restoreTimerState(String uid) async {
     final saved = await FirebaseSyncService.loadTimerState(uid);
     if (saved.isNotEmpty) {
       final seconds = (saved['elapsedSeconds'] as num?)?.toInt() ?? 0;
-      final target = (saved['targetMinutes'] as num?)?.toInt() ?? 120;
+      final rawTarget = (saved['targetMinutes'] as num?)?.toInt() ?? 120;
+      final target = math.max(120, rawTarget);
       studyTimerStore.setTarget(target);
       if (seconds > 0) {
         studyTimerStore.restoreElapsed(Duration(seconds: seconds));
@@ -115,7 +118,11 @@ class SmartSchoolApp extends StatelessWidget {
               themeMode: mode,
               theme: _themedBase(Brightness.light, locale),
               darkTheme: _themedBase(Brightness.dark, locale),
-              builder: (context, child) => EmailLinkListener(child: child ?? const SizedBox.shrink()),
+              builder: (context, child) => GlobalStudyTimerOverlay(
+                child: EmailLinkListener(
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
               home: (FirebaseAuth.instance.currentUser != null)
                   ? const MainNavigationScreen()
                   : const WelcomeScreen(),
