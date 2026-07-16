@@ -83,6 +83,11 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   final _aiModelController = TextEditingController();
   bool _isSavingAiConfig = false;
 
+  // ── حقول التحكم بالمشرفين وصلاحيات السحابة ────────────────────────
+  final _adminUidController = TextEditingController();
+  final _adminNameController = TextEditingController();
+  bool _isSavingAdmin = false;
+
   // ── 2) حقول تفاصيل الدرس ورابط الفيديو والملخص واختيار الوحدة ─────────────
   final _unitTitleController = TextEditingController();
   final _lessonTitleController = TextEditingController();
@@ -199,10 +204,66 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     }
   }
 
+  Future<void> _saveNewAdmin() async {
+    final uid = _adminUidController.text.trim();
+    final name = _adminNameController.text.trim();
+    if (uid.isEmpty) {
+      _showSnackBar('يرجى إدخال معرف الحساب (UID) للمشرف أولاً', isError: true);
+      return;
+    }
+    setState(() => _isSavingAdmin = true);
+    try {
+      await FirebaseFirestore.instance.collection('admins').doc(uid).set({
+        'uid': uid,
+        'name': name.isEmpty ? 'مشرف سحابي' : name,
+        'addedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (!mounted) return;
+      _adminUidController.clear();
+      _adminNameController.clear();
+      _showSnackBar('تمت إضافة المشرف بنجاح وتفعيل صلاحياته في السحابة');
+    } catch (e) {
+      _showSnackBar('تعذر إضافة المشرف: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSavingAdmin = false);
+    }
+  }
+
+  Future<void> _deleteAdmin(String uid, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text('سحب الصلاحية السحابية', style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text('هل أنت متأكد من رغبتك في حذف المشرف "$name" ($uid) وسحب كافة صلاحياته الإدارية من السحابة؟', style: GoogleFonts.tajawal(color: const Color(0xFF94A3B8))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('إلغاء', style: GoogleFonts.tajawal(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('حذف وسحب الصلاحية', style: GoogleFonts.tajawal(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await FirebaseFirestore.instance.collection('admins').doc(uid).delete();
+      if (!mounted) return;
+      _showSnackBar('تم حذف المشرف وسحب صلاحياته بنجاح');
+    } catch (e) {
+      _showSnackBar('تعذر حذف المشرف: $e', isError: true);
+    }
+  }
+
   @override
   void dispose() {
     _apiKeyController.dispose();
     _aiModelController.dispose();
+    _adminUidController.dispose();
+    _adminNameController.dispose();
     _unitTitleController.dispose();
     _lessonTitleController.dispose();
     _videoUrlController.dispose();
@@ -628,6 +689,136 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     }
   }
 
+  Future<void> _deleteCurrentLessonFromDb() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text('حذف الدرس من السحابة', style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text('هل أنت متأكد من رغبتك في حذف الدرس رقم "$_selectedLessonNumber" وكل محتوياته وأسئلته نهائياً؟', style: GoogleFonts.tajawal(color: const Color(0xFF94A3B8))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('إلغاء', style: GoogleFonts.tajawal(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('حذف الدرس نهائياً', style: GoogleFonts.tajawal(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isPublishing = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      final subjectDocId = FirebaseSyncService.getSubjectDocId(
+          _selectedSubject, _selectedGrade,
+          semester: _selectedSemester);
+      final subjectDocRef = db.collection('subjects').doc(subjectDocId);
+
+      await db.runTransaction((tx) async {
+        final snapshot = await tx.get(subjectDocRef);
+        if (!snapshot.exists || snapshot.data() == null) return;
+
+        final unitsList = List<dynamic>.from(snapshot.data()!['units'] as List? ?? []);
+        if (_selectedUnitIndex >= unitsList.length) return;
+
+        final unitMap = Map<String, dynamic>.from(unitsList[_selectedUnitIndex] as Map);
+        final lessonsList = List<dynamic>.from(unitMap['lessons'] as List? ?? []);
+        final lessonIndex = _selectedLessonNumber - 1;
+
+        if (lessonIndex < lessonsList.length) {
+          lessonsList.removeAt(lessonIndex);
+          unitMap['lessons'] = lessonsList;
+          unitsList[_selectedUnitIndex] = unitMap;
+
+          tx.set(
+            subjectDocRef,
+            {
+              'units': unitsList,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
+      });
+
+      if (!mounted) return;
+      _clearFormAfterPublish();
+      _showSnackBar('تم حذف الدرس بنجاح من السحابة ✅');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('تعذر حذف الدرس: $e ❌', isError: true);
+    } finally {
+      if (mounted) setState(() => _isPublishing = false);
+    }
+  }
+
+  Future<void> _deleteCurrentUnitFromDb() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text('تحذير: حذف الوحدة بالكامل', style: GoogleFonts.tajawal(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+        content: Text('سيتم مسح الوحدة رقم "${_selectedUnitIndex + 1}" وجميع الدروس والأسئلة التابعة لها نهائياً من مادة "$_selectedSubject"! هل تريد الاستمرار؟', style: GoogleFonts.tajawal(color: const Color(0xFFF8FAFC))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('تراجع', style: GoogleFonts.tajawal(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('نعم، حذف الوحدة بالكامل', style: GoogleFonts.tajawal(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isPublishing = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      final subjectDocId = FirebaseSyncService.getSubjectDocId(
+          _selectedSubject, _selectedGrade,
+          semester: _selectedSemester);
+      final subjectDocRef = db.collection('subjects').doc(subjectDocId);
+
+      await db.runTransaction((tx) async {
+        final snapshot = await tx.get(subjectDocRef);
+        if (!snapshot.exists || snapshot.data() == null) return;
+
+        final unitsList = List<dynamic>.from(snapshot.data()!['units'] as List? ?? []);
+        if (_selectedUnitIndex < unitsList.length) {
+          unitsList.removeAt(_selectedUnitIndex);
+
+          tx.set(
+            subjectDocRef,
+            {
+              'units': unitsList,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _selectedUnitIndex = 0;
+        _selectedLessonNumber = 1;
+      });
+      _clearFormAfterPublish();
+      _showSnackBar('تم حذف الوحدة وجميع دروسها بنجاح من السحابة 🗑️✅');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('تعذر حذف الوحدة: $e ❌', isError: true);
+    } finally {
+      if (mounted) setState(() => _isPublishing = false);
+    }
+  }
+
   // ── 4) زر "حفظ التغييرات في Firebase" (المزامنة الشاملة) ────────────────────
   Future<void> _saveChangesToFirebase() async {
     if (!_formKey.currentState!.validate()) {
@@ -739,6 +930,8 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     _qOptBController.clear();
     _qOptCController.clear();
     _qOptDController.clear();
+    _adminUidController.clear();
+    _adminNameController.clear();
     setState(() {
       _qCorrectIndex = 0;
       _tempQuestionsList.clear();
@@ -1139,18 +1332,37 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // حقل تعديل اسم الوحدة وحفظه في قواعد البيانات
-                          _buildTextFormField(
-                            label:
-                                'اسم الوحدة المحددة (تعديل وحفظ مباشرة في قاعدة البيانات)',
-                            controller: _unitTitleController,
-                            hint:
-                                'مثال: الوحدة الأولى: الأعداد النسبية وتطبيقاتها',
-                            borderColor: borderColor,
-                            textPrimary: textPrimary,
-                            textSecondary: textSecondary,
-                            prefixIcon: const Icon(Icons.edit_note_rounded,
-                                color: Colors.amberAccent, size: 22),
+                          // حقل تعديل اسم الوحدة وحفظه في قواعد البيانات + زر حذف الوحدة
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextFormField(
+                                  label:
+                                      'اسم الوحدة المحددة (تعديل وحفظ مباشرة في قاعدة البيانات)',
+                                  controller: _unitTitleController,
+                                  hint:
+                                      'مثال: الوحدة الأولى: الأعداد النسبية وتطبيقاتها',
+                                  borderColor: borderColor,
+                                  textPrimary: textPrimary,
+                                  textSecondary: textSecondary,
+                                  prefixIcon: const Icon(Icons.edit_note_rounded,
+                                      color: Colors.amberAccent, size: 22),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5), width: 1.2),
+                                ),
+                                child: IconButton(
+                                  onPressed: _isPublishing ? null : _deleteCurrentUnitFromDb,
+                                  icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 26),
+                                  tooltip: 'حذف هذه الوحدة بالكامل وجميع دروسها من السحابة',
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 16),
 
@@ -1656,6 +1868,30 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 ),
               ),
 
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: OutlinedButton.icon(
+                  onPressed: _isPublishing ? null : _deleteCurrentLessonFromDb,
+                  icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 22),
+                  label: Text(
+                    '🗑️ حذف هذا الدرس نهائياً من السحابة (مع أسئلته وملخصه)',
+                    style: GoogleFonts.tajawal(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 24),
 
               // ── قسم إعدادات الذكاء الاصطناعي ────────────────────────────────
@@ -1729,6 +1965,161 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+              // ── قسم إدارة المشرفين والصلاحيات ────────────────────────────────
+              _buildSectionHeader(
+                icon: Icons.admin_panel_settings_rounded,
+                title: 'إدارة المشرفين والصلاحيات السحابية (Admins)',
+                accentColor: const Color(0xFF3B82F6), // Blue Accent
+              ),
+              const SizedBox(height: 12),
+              Card(
+                color: cardBgColor,
+                elevation: 4,
+                shadowColor: Colors.black26,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: const BorderSide(color: borderColor, width: 1.2),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'يمكنك إضافة معرفات الحسابات (UID) للمشرفين والمعلمين ليتمكنوا من تعديل الدروس وإدارة المحتوى من السحابة مباشرة:',
+                        style: GoogleFonts.tajawal(
+                          fontSize: 13.5,
+                          color: textSecondary,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildTextFormField(
+                        label: 'معرف المشرف (User UID):',
+                        controller: _adminUidController,
+                        hint: 'a1b2c3d4e5f6...',
+                        borderColor: borderColor,
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                        prefixIcon: const Icon(Icons.badge_rounded, color: Color(0xFF3B82F6)),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildTextFormField(
+                        label: 'اسم المشرف / الوصف:',
+                        controller: _adminNameController,
+                        hint: 'أستاذ محمد - مشرف العلوم',
+                        borderColor: borderColor,
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                        prefixIcon: const Icon(Icons.person_rounded, color: Color(0xFF3B82F6)),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isSavingAdmin ? null : _saveNewAdmin,
+                          icon: _isSavingAdmin
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.person_add_alt_1_rounded, size: 20),
+                          label: Text(
+                            _isSavingAdmin ? 'جاري إضافة المشرف...' : 'إضافة وتفعيل صلاحيات المشرف 🚀',
+                            style: GoogleFonts.tajawal(fontSize: 14, fontWeight: FontWeight.w700),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3B82F6),
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(48),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'قائمة المشرفين المعتمدين حالياً في قاعدة البيانات:',
+                        style: GoogleFonts.tajawal(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance.collection('admins').snapshots(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return Text('تعذر تحميل القائمة: ${snapshot.error}', style: GoogleFonts.tajawal(color: Colors.redAccent, fontSize: 13));
+                          }
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()));
+                          }
+                          final docs = snapshot.data?.docs ?? [];
+                          if (docs.isEmpty) {
+                            return Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: bgColor,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'لا يوجد مشرفون مضافون بعد عبر هذه القائمة (يعتمد النظام حالياً على قائمة البريد الافتراضية).',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.tajawal(color: textSecondary, fontSize: 13),
+                                ),
+                              ),
+                            );
+                          }
+                          return ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: docs.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final data = docs[index].data() as Map<String, dynamic>? ?? {};
+                              final uid = docs[index].id;
+                              final name = data['name'] as String? ?? 'مشرف سحابي';
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: bgColor,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: borderColor, width: 1),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.verified_user_rounded, color: Color(0xFF3B82F6), size: 22),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(name, style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                                          Text('UID: $uid', style: GoogleFonts.tajawal(color: textSecondary, fontSize: 11)),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+                                      tooltip: 'سحب الصلاحية',
+                                      onPressed: () => _deleteAdmin(uid, name),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
                     ],
                   ),

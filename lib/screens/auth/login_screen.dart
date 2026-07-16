@@ -27,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _firebaseService = FirebaseService();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _isPasswordlessMode = true; // الخيار الأساسي: رابط البريد (Passwordless Sign-In)
+  bool _isPasswordlessMode = false; // الوضع الافتراضي: تسجيل الدخول بكلمة المرور
 
   @override
   void dispose() {
@@ -190,10 +190,33 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute<void>(builder: (context) => const MainNavigationScreen()),
         (route) => false,
       );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      String message = 'تعذر تسجيل الدخول، يرجى المحاولة مرة أخرى.';
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
+        message = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+      } else if (e.code == 'invalid-email') {
+        message = 'صيغة البريد الإلكتروني غير صحيحة.';
+      } else if (e.code == 'user-disabled') {
+        message = 'هذا الحساب معطل.';
+      } else if (e.message != null && e.message!.isNotEmpty) {
+        message = e.message!;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message, style: GoogleFonts.tajawal()),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('فشل تسجيل الدخول: $e', style: GoogleFonts.tajawal())),
+        SnackBar(
+          content: Text('فشل تسجيل الدخول: $e', style: GoogleFonts.tajawal()),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -369,7 +392,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       
                       Text(
-                        _isPasswordlessMode ? 'الدخول والتسجيل السريع' : 'تسجيل الدخول',
+                        _isPasswordlessMode ? 'الدخول السريع عبر الرابط' : 'تسجيل الدخول',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
                           fontSize: 26,
@@ -380,8 +403,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 8),
                       Text(
                         _isPasswordlessMode
-                            ? 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً سحرياً لتسجيل الدخول أو إنشاء حساب جديد فوراً.'
-                            : 'قم بتسجيل الدخول بكلمة المرور لمتابعة رحلتك التعليمية.',
+                            ? 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً سحرياً لتسجيل الدخول فوراً.'
+                            : 'أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى حسابك الدراسي.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
                           fontSize: 14,
@@ -471,7 +494,48 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
+
+                        // زر إنشاء حساب جديد البارز
+                        if (!_isPasswordlessMode) ...[
+                          Container(
+                            decoration: BoxDecoration(
+                              color: scheme.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    RegisterScreen.route(email: _emailController.text.trim()),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.person_add_rounded, color: scheme.primary, size: 22),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'ليس لديك حساب؟ إنشاء حساب جديد الآن',
+                                        style: GoogleFonts.tajawal(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15,
+                                          color: scheme.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
                         
                         // زر التبديل بين وضع رابط البريد ووضع كلمة المرور
                         TextButton(
@@ -480,12 +544,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                           child: Text(
                             _isPasswordlessMode
-                                ? 'الدخول بواسطة كلمة المرور (للحسابات القديمة)'
-                                : 'الرجوع إلى التسجيل والدخول عبر رابط البريد السريع',
+                                ? 'الدخول بواسطة كلمة المرور'
+                                : 'الدخول السريع عبر رابط البريد (بدون كلمة مرور)',
                             style: GoogleFonts.tajawal(
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
-                              color: scheme.primary,
+                              color: scheme.secondary,
                             ),
                           ),
                         ),

@@ -90,6 +90,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late final TextEditingController _schoolController;
   late final TextEditingController _ageController;
   late final TextEditingController _emailController;
+  late final TextEditingController _passwordController;
+  late final TextEditingController _confirmPasswordController;
+  bool _obscurePassword = true;
   late String _selectedGrade;
   late String _gender;
 
@@ -109,6 +112,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         text: p.age > 0 ? p.age.toString() : '',
       );
       _emailController = TextEditingController(text: p.email);
+      _passwordController = TextEditingController(text: p.pin);
+      _confirmPasswordController = TextEditingController(text: p.pin);
       _selectedGrade = _coerceGrade(p.grade);
       _gender = _coerceGender(p.gender);
     } else {
@@ -118,6 +123,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final currentAuthUser = FirebaseAuth.instance.currentUser;
       final autoEmail = widget.initialEmail ?? currentAuthUser?.email ?? '';
       _emailController = TextEditingController(text: autoEmail);
+      _passwordController = TextEditingController(text: widget.initialPassword ?? '');
+      _confirmPasswordController = TextEditingController(text: widget.initialPassword ?? '');
       _selectedGrade = RegisterScreen.gradeOptions.first;
       _gender = RegisterScreen.genderOptions.first;
     }
@@ -129,6 +136,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _schoolController.dispose();
     _ageController.dispose();
     _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -144,6 +153,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final fullName = _fullNameController.text.trim();
     final school = _schoolController.text.trim();
     final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (!widget.isEditMode && password != _confirmPasswordController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('كلمة المرور وتأكيد كلمة المرور غير متطابقين', style: GoogleFonts.tajawal()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -154,14 +174,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!widget.isEditMode) {
         final currentUser = firebaseService.currentUser;
-        if (currentUser != null) {
+        if (currentUser != null && (currentUser.isAnonymous || currentUser.email == email)) {
           createdUser = currentUser;
           uid = createdUser.uid;
+          if (currentUser.isAnonymous) {
+            try {
+              final cred = await currentUser.linkWithCredential(
+                EmailAuthProvider.credential(email: email, password: password),
+              );
+              createdUser = cred.user;
+              uid = createdUser?.uid ?? uid;
+            } catch (_) {
+              final creds = await firebaseService.signUpWithEmailAndPassword(email, password);
+              createdUser = creds.user;
+              uid = createdUser?.uid ?? '';
+            }
+          }
         } else {
-          // إذا لم يكن هناك مستخدم مسجل الدخول، يتم إنشاء حساب بكلمة مرور عشوائية أو مجهول
+          // إنشاء حساب جديد بالبريد الإلكتروني وكلمة المرور الحقيقية التي أدخلها المستخدم
           final creds = await firebaseService.signUpWithEmailAndPassword(
             email,
-            'Pass_${DateTime.now().millisecondsSinceEpoch}',
+            password,
           );
           createdUser = creds.user;
           uid = createdUser?.uid ?? '';
@@ -185,6 +218,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         age: age,
         gender: _gender,
         profileImageUrl: profileImageUrl,
+        email: email,
+        pin: password.isNotEmpty ? password : userProfileNotifier.value.pin,
       );
 
       try {
@@ -210,6 +245,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
           (route) => false,
         );
       }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      String message = 'حدث خطأ أثناء إنشاء الحساب.';
+      if (e.code == 'email-already-in-use') {
+        message = 'هذا البريد الإلكتروني مسجل مسبقاً، يرجى تسجيل الدخول بدلاً من ذلك.';
+      } else if (e.code == 'weak-password') {
+        message = 'كلمة المرور ضعيفة جداً (يجب أن تكون 6 أحرف أو أكثر).';
+      } else if (e.code == 'invalid-email') {
+        message = 'صيغة البريد الإلكتروني غير صحيحة.';
+      } else if (e.message != null && e.message!.isNotEmpty) {
+        message = e.message!;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message, style: GoogleFonts.tajawal()),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -374,13 +428,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _emailController,
-              readOnly: _emailController.text.isNotEmpty,
+              readOnly: widget.isEditMode || (widget.initialEmail != null && widget.initialEmail!.isNotEmpty),
               keyboardType: TextInputType.emailAddress,
               decoration: _fieldDecoration(
                 scheme,
-                label: 'البريد الإلكتروني (مؤكد تلقائياً)',
+                label: widget.isEditMode || (widget.initialEmail != null && widget.initialEmail!.isNotEmpty)
+                    ? 'البريد الإلكتروني (مؤكد)'
+                    : 'البريد الإلكتروني',
                 prefix: const Icon(Icons.mark_email_read_rounded, color: Colors.green),
-                suffix: _emailController.text.isNotEmpty
+                suffix: widget.isEditMode || (widget.initialEmail != null && widget.initialEmail!.isNotEmpty)
                     ? const Icon(Icons.verified_rounded, color: Colors.green)
                     : null,
               ),
@@ -392,6 +448,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 return null;
               },
             ),
+            if (!widget.isEditMode) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                decoration: _fieldDecoration(
+                  scheme,
+                  label: 'كلمة المرور (6 أحرف أو أكثر)',
+                  prefix: const Icon(Icons.lock_outline_rounded),
+                  suffix: IconButton(
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+                style: GoogleFonts.tajawal(fontSize: 16),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'يرجى إدخال كلمة المرور';
+                  if (v.trim().length < 6) return 'كلمة المرور يجب أن لا تقل عن 6 خانات';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscurePassword,
+                decoration: _fieldDecoration(
+                  scheme,
+                  label: 'تأكيد كلمة المرور',
+                  prefix: const Icon(Icons.lock_reset_rounded),
+                ),
+                style: GoogleFonts.tajawal(fontSize: 16),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'يرجى تأكيد كلمة المرور';
+                  if (v.trim() != _passwordController.text.trim()) return 'كلمتا المرور غير متطابقتين';
+                  return null;
+                },
+              ),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _schoolController,

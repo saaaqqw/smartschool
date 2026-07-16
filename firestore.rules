@@ -28,40 +28,63 @@ service cloud.firestore {
       }
     }
 
+    // دالة التحقق من صلاحية المشرف / المطور
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.email in ['aaasss@gmail.com', 'admin@smartschool.com', 'developer@smartschool.com'] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // ─── المشرفون (Admins) ──────────────────────────────────────
+    match /admins/{adminUid} {
+      allow read: if request.auth != null && (request.auth.uid == adminUid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ─── إعدادات النظام و AiConfig ──────────────────────────────
+    match /settings/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // ─── المواد الدراسية (للجميع قراءة، للمشرفين كتابة) ─────────
     match /subjects/{subjectId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;   // المطور يكتب عبر لوحة التحكم
+      allow write: if isAdmin();   // المشرفون والمطورون فقط
 
-      // الدروس — الجميع يقرأ
+      // الدروس — الجميع يقرأ، المشرفون فقط يكتبون
       match /lessons/{lessonId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow write: if isAdmin();
 
-        // الأسئلة — الجميع يقرأ
+        // الأسئلة — الجميع يقرأ، المشرفون فقط يكتبون
         match /questions/{questionId} {
           allow read: if request.auth != null;
-          allow write: if request.auth != null;
+          allow write: if isAdmin();
         }
       }
 
-      // الوحدات — الجميع يقرأ
+      // الوحدات — الجميع يقرأ، المشرفون فقط يكتبون
       match /units/{unitId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow write: if isAdmin();
 
         match /lessons/{lessonId} {
           allow read: if request.auth != null;
-          allow write: if request.auth != null;
+          allow write: if isAdmin();
         }
       }
     }
+
 
     // ─── الدرجات — للمستخدم نفسه فقط ────────────────────────────
     match /grades/{gradeId} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if false;
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if false;
     }
   }
 }
