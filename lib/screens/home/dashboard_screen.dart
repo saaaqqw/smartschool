@@ -15,6 +15,8 @@ import '../../widgets/profile_image_picker_sheet.dart';
 
 import '../../data/subject_curriculum.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../notifications/notifications_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigateToPage});
@@ -281,11 +283,89 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        const _NotificationBellButton(),
+        const SizedBox(width: 8),
         IconButton.filledTonal(
           onPressed: onSettings,
           icon: const Icon(Icons.settings_rounded),
         ),
       ],
+    );
+  }
+}
+
+class _NotificationBellButton extends StatelessWidget {
+  const _NotificationBellButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final profile = userProfileNotifier.value;
+    final studentGrade = profile.grade.trim();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('notifications').snapshots(),
+      builder: (context, snapshot) {
+        return FutureBuilder<SharedPreferences>(
+          future: SharedPreferences.getInstance(),
+          builder: (context, prefsSnap) {
+            int unreadCount = 0;
+            bool notificationsEnabled = true;
+            if (snapshot.hasData && prefsSnap.hasData) {
+              notificationsEnabled = prefsSnap.data!.getBool('notifications_enabled') ?? true;
+              if (notificationsEnabled) {
+                final readIds = (prefsSnap.data!.getStringList('read_notification_ids') ?? []).toSet();
+                final docs = snapshot.data!.docs.where((d) {
+                  final data = d.data() as Map<String, dynamic>? ?? {};
+                  final target = (data['targetGrade'] ?? 'الكل').toString().trim();
+                  if (target == 'الكل' || target == 'جميع الطلاب') return true;
+                  if (studentGrade.isNotEmpty && target == studentGrade) return true;
+                  return false;
+                });
+                unreadCount = docs.where((d) => !readIds.contains(d.id)).length;
+              }
+            }
+
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton.filledTonal(
+                  onPressed: () {
+                    Navigator.push(context, NotificationsScreen.route());
+                  },
+                  icon: Icon(
+                    notificationsEnabled ? Icons.notifications_rounded : Icons.notifications_off_rounded,
+                    color: notificationsEnabled ? null : scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade600,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: scheme.surface, width: 1.5),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : '$unreadCount',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.tajawal(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -60,6 +60,13 @@ class DeveloperDashboardScreen extends StatefulWidget {
 class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  int _dashboardTab = 0; // 0: إدارة الدروس، 1: بث الإشعارات
+  final _notifTitleController = TextEditingController();
+  final _notifBodyController = TextEditingController();
+  String _notifTargetGrade = 'الكل';
+  String _notifType = 'general';
+  bool _isSendingNotif = false;
+
   // ── 1) القوائم المنسدلة (الصف، الفصل، المادة، الوحدة والدرس) ─────────────────────
   String _selectedGrade = 'الصف السابع';
   String _selectedSemester = 'الفصل الدراسي الأول';
@@ -275,7 +282,69 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     _qOptBController.dispose();
     _qOptCController.dispose();
     _qOptDController.dispose();
+    _notifTitleController.dispose();
+    _notifBodyController.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendBroadcastNotification() async {
+    final title = _notifTitleController.text.trim();
+    final body = _notifBodyController.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('الرجاء إدخال عنوان الإشعار على الأقل.')),
+      );
+      return;
+    }
+
+    setState(() => _isSendingNotif = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      await db.collection('notifications').add({
+        'title': title,
+        'body': body,
+        'type': _notifType,
+        'targetGrade': _notifTargetGrade,
+        'senderName': 'إدارة المدرسة / المشرف المعتمد',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      _notifTitleController.clear();
+      _notifBodyController.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('تم بث الإشعار للطلاب بنجاح! 📢✅'),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ أثناء إرسال الإشعار: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingNotif = false);
+    }
+  }
+
+  Future<void> _deleteBroadcastNotification(String notifId) async {
+    try {
+      await FirebaseFirestore.instance.collection('notifications').doc(notifId).delete();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم حذف الإشعار بنجاح 🗑️'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ في حذف الإشعار: $e')),
+      );
+    }
   }
 
   Future<void> _initSubjectData() async {
@@ -292,14 +361,52 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
         _bookUrlController.text = data['bookUrl'] as String? ?? '';
 
         final unitsRaw = data['units'];
+        final schoolSubject = kCoreSubjects.firstWhere(
+            (s) => s.title == _selectedSubject,
+            orElse: () => kCoreSubjects.first);
         if (unitsRaw is List) {
-          for (final u in unitsRaw) {
-            if (u is Map) dbUnits.add(Map<String, dynamic>.from(u));
+          for (int i = 0; i < unitsRaw.length; i++) {
+            final u = unitsRaw[i];
+            if (u is Map) {
+              final map = Map<String, dynamic>.from(u);
+              if (i < schoolSubject.units.length &&
+                  (schoolSubject.subjectId == 'social' ||
+                      schoolSubject.subjectId == 'quran' ||
+                      schoolSubject.subjectId == 'islamic')) {
+                map['title'] = schoolSubject.units[i].title;
+              }
+              dbUnits.add(map);
+            }
           }
+        }
+        // التأكد من إضافة كافة فروع المنهج المقسمة في حال لم يتم إنشاؤها مسبقاً في المستند
+        while (dbUnits.length < schoolSubject.units.length &&
+            (schoolSubject.subjectId == 'social' ||
+                schoolSubject.subjectId == 'quran' ||
+                schoolSubject.subjectId == 'islamic')) {
+          dbUnits.add({
+            'index': dbUnits.length,
+            'title': schoolSubject.units[dbUnits.length].title,
+            'lessons': [],
+          });
         }
       } else {
         _bookTitleController.clear();
         _bookUrlController.clear();
+        final schoolSubject = kCoreSubjects.firstWhere(
+            (s) => s.title == _selectedSubject,
+            orElse: () => kCoreSubjects.first);
+        if (schoolSubject.subjectId == 'social' ||
+            schoolSubject.subjectId == 'quran' ||
+            schoolSubject.subjectId == 'islamic') {
+          for (int i = 0; i < schoolSubject.units.length; i++) {
+            dbUnits.add({
+              'index': i,
+              'title': schoolSubject.units[i].title,
+              'lessons': [],
+            });
+          }
+        }
       }
       if (_selectedUnitIndex < dbUnits.length) {
         _unitTitleController.text =
@@ -401,17 +508,49 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       _tempQuestionsList.clear();
 
       List<Map<String, dynamic>> dbUnits = providedUnits ?? [];
+      final schoolSubject = kCoreSubjects.firstWhere(
+          (s) => s.title == _selectedSubject,
+          orElse: () => kCoreSubjects.first);
       if (dbUnits.isEmpty) {
         final subjSnap =
             await db.collection('subjects').doc(subjectDocId).get();
         if (subjSnap.exists && subjSnap.data() != null) {
           final unitsRaw = subjSnap.data()!['units'];
           if (unitsRaw is List) {
-            for (final u in unitsRaw) {
-              if (u is Map) dbUnits.add(Map<String, dynamic>.from(u));
+            for (int i = 0; i < unitsRaw.length; i++) {
+              final u = unitsRaw[i];
+              if (u is Map) {
+                final map = Map<String, dynamic>.from(u);
+                if (i < schoolSubject.units.length &&
+                    (schoolSubject.subjectId == 'social' ||
+                        schoolSubject.subjectId == 'quran' ||
+                        schoolSubject.subjectId == 'islamic')) {
+                  map['title'] = schoolSubject.units[i].title;
+                }
+                dbUnits.add(map);
+              }
             }
           }
         }
+      } else {
+        for (int i = 0; i < dbUnits.length; i++) {
+          if (i < schoolSubject.units.length &&
+              (schoolSubject.subjectId == 'social' ||
+                  schoolSubject.subjectId == 'quran' ||
+                  schoolSubject.subjectId == 'islamic')) {
+            dbUnits[i]['title'] = schoolSubject.units[i].title;
+          }
+        }
+      }
+      while (dbUnits.length < schoolSubject.units.length &&
+          (schoolSubject.subjectId == 'social' ||
+              schoolSubject.subjectId == 'quran' ||
+              schoolSubject.subjectId == 'islamic')) {
+        dbUnits.add({
+          'index': dbUnits.length,
+          'title': schoolSubject.units[dbUnits.length].title,
+          'lessons': [],
+        });
       }
 
       if (_selectedUnitIndex < dbUnits.length) {
@@ -515,19 +654,55 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           unitsList =
               List<dynamic>.from(snapshot.data()!['units'] as List? ?? []);
         }
+        final schoolSubject = kCoreSubjects.firstWhere(
+            (s) => s.title == _selectedSubject,
+            orElse: () => kCoreSubjects.first);
         if (unitsList.isEmpty) {
-          unitsList = [
-            {'title': 'مقدمة المادة', 'lessons': []},
-            {'title': 'الوحدة الأولى', 'lessons': []},
-            {'title': 'الوحدة الثانية', 'lessons': []},
-            {'title': 'الوحدة الثالثة', 'lessons': []},
-          ];
+          if (schoolSubject.subjectId == 'social' ||
+              schoolSubject.subjectId == 'quran' ||
+              schoolSubject.subjectId == 'islamic') {
+            for (int i = 0; i < schoolSubject.units.length; i++) {
+              unitsList.add({
+                'index': i,
+                'title': schoolSubject.units[i].title,
+                'lessons': [],
+              });
+            }
+          } else {
+            unitsList = [
+              {'title': 'مقدمة المادة', 'lessons': []},
+              {'title': 'الوحدة الأولى', 'lessons': []},
+              {'title': 'الوحدة الثانية', 'lessons': []},
+              {'title': 'الوحدة الثالثة', 'lessons': []},
+            ];
+          }
+        }
+        // التأكد من أن عناوين فروع المواد المقسمة محدثة دائماً وبدقة
+        for (int i = 0; i < unitsList.length; i++) {
+          if (i < schoolSubject.units.length &&
+              (schoolSubject.subjectId == 'social' ||
+                  schoolSubject.subjectId == 'quran' ||
+                  schoolSubject.subjectId == 'islamic')) {
+            if (unitsList[i] is Map) {
+              final m = Map<String, dynamic>.from(unitsList[i] as Map);
+              m['title'] = schoolSubject.units[i].title;
+              unitsList[i] = m;
+            }
+          }
         }
         while (unitsList.length <= _selectedUnitIndex) {
+          String fallbackTitle = _unitTitleController.text.trim().isNotEmpty
+              ? _unitTitleController.text.trim()
+              : 'الوحدة ${unitsList.length + 1}';
+          if (unitsList.length < schoolSubject.units.length &&
+              (schoolSubject.subjectId == 'social' ||
+                  schoolSubject.subjectId == 'quran' ||
+                  schoolSubject.subjectId == 'islamic')) {
+            fallbackTitle = schoolSubject.units[unitsList.length].title;
+          }
           unitsList.add({
-            'title': _unitTitleController.text.trim().isNotEmpty
-                ? _unitTitleController.text.trim()
-                : 'الوحدة ${unitsList.length + 1}',
+            'index': unitsList.length,
+            'title': fallbackTitle,
             'lessons': [],
           });
         }
@@ -1120,11 +1295,17 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       ),
       body: Directionality(
         textDirection: TextDirection.rtl,
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
+        child: Column(
+          children: [
+            _buildDashboardTabSwitcher(cardBgColor, borderColor, accentColor, textPrimary, textSecondary),
+            Expanded(
+              child: _dashboardTab == 1
+                  ? _buildBroadcastNotificationsTab(cardBgColor, borderColor, accentColor, textPrimary, textSecondary)
+                  : Form(
+                      key: _formKey,
+                      child: ListView(
+                        padding: const EdgeInsets.all(20),
+                        children: [
               // ══════════════════════════════════════════════════════════════
               // القسم الأول: قوائم منسدلة منسقة لاختيار المنهج
               // (الفصل الدراسي، الصف الدراسي، المادة، الوحدة والدرس)
@@ -2151,6 +2332,9 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           ),
         ),
       ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2490,6 +2674,400 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDashboardTabSwitcher(
+    Color cardBgColor,
+    Color borderColor,
+    Color accentColor,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: cardBgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => setState(() => _dashboardTab = 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: _dashboardTab == 0 ? accentColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.menu_book_rounded,
+                      size: 20,
+                      color: _dashboardTab == 0 ? Colors.white : textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '📚 إدارة المناهج والدروس',
+                      style: GoogleFonts.tajawal(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: _dashboardTab == 0 ? Colors.white : textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => setState(() => _dashboardTab = 1),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: _dashboardTab == 1 ? Colors.red.shade600 : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.campaign_rounded,
+                      size: 20,
+                      color: _dashboardTab == 1 ? Colors.white : textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '📢 مركز بث الإشعارات للطلاب',
+                      style: GoogleFonts.tajawal(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: _dashboardTab == 1 ? Colors.white : textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBroadcastNotificationsTab(
+    Color cardBgColor,
+    Color borderColor,
+    Color accentColor,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: cardBgColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.red.shade600.withValues(alpha: 0.4), width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade600.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.send_rounded, color: Colors.red.shade400, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'إرسال إشعار فوري جديد للطلاب',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'سيصل هذا الإشعار فوراً إلى مركز إشعارات الطلاب وأيقونة التنبيه بالصفحة الرئيسية.',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 13,
+                            color: textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _notifTitleController,
+                style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
+                decoration: InputDecoration(
+                  labelText: 'عنوان الإشعار (مثال: تنبيه هام من إدارة المدرسة)',
+                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _notifBodyController,
+                maxLines: 4,
+                style: GoogleFonts.tajawal(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'نص الإشعار التفصيلي والتعليمات...',
+                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('الفئة المستهدفة:', style: GoogleFonts.tajawal(color: textSecondary, fontSize: 13)),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _notifTargetGrade,
+                              isExpanded: true,
+                              dropdownColor: cardBgColor,
+                              style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
+                              items: ['الكل', 'الصف السابع', 'الصف الثامن', 'الصف التاسع', 'الصف العاشر', 'الصف الحادي عشر', 'الصف الثاني عشر']
+                                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                                  .toList(),
+                              onChanged: (v) {
+                                if (v != null) setState(() => _notifTargetGrade = v);
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('أهمية ونوع الإشعار:', style: GoogleFonts.tajawal(color: textSecondary, fontSize: 13)),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _notifType,
+                              isExpanded: true,
+                              dropdownColor: cardBgColor,
+                              style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
+                              items: const [
+                                DropdownMenuItem(value: 'general', child: Text('🔵 تنبيه عام')),
+                                DropdownMenuItem(value: 'urgent', child: Text('🔴 تنبيه عاجل وهام')),
+                                DropdownMenuItem(value: 'study', child: Text('🟡 تنبيه دراسي / أكاديمي')),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) setState(() => _notifType = v);
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isSendingNotif ? null : _sendBroadcastNotification,
+                  icon: _isSendingNotif
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.podcasts_rounded, size: 22),
+                  label: Text(
+                    'إرسال وبث الإشعار للطلاب الآن',
+                    style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.w900),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'قائمة الإشعارات المرتسلَة السابقة (السحابية):',
+          style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
+        ),
+        const SizedBox(height: 12),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('notifications')
+              .orderBy('createdAt', descending: true)
+              .limit(30)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('خطأ في تحميل الإشعارات السابقة', style: GoogleFonts.tajawal(color: textSecondary)));
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+            }
+            final docs = snapshot.data!.docs;
+            if (docs.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(color: cardBgColor, borderRadius: BorderRadius.circular(16)),
+                child: Center(
+                  child: Text('لم يتم إرسال أي إشعارات حتى الآن', style: GoogleFonts.tajawal(color: textSecondary)),
+                ),
+              );
+            }
+
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: docs.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final doc = docs[index];
+                final data = doc.data() as Map<String, dynamic>? ?? {};
+                final title = data['title'] ?? 'بدون عنوان';
+                final body = data['body'] ?? '';
+                final target = data['targetGrade'] ?? 'الكل';
+                final type = data['type'] ?? 'general';
+
+                Color badgeColor = Colors.blue.shade400;
+                if (type == 'urgent') badgeColor = Colors.red.shade400;
+                if (type == 'study') badgeColor = Colors.amber.shade400;
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardBgColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 48,
+                        decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(6)),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title.toString(),
+                                    style: GoogleFonts.tajawal(fontSize: 15, fontWeight: FontWeight.w800, color: textPrimary),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: badgeColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    target.toString(),
+                                    style: GoogleFonts.tajawal(fontSize: 11, fontWeight: FontWeight.bold, color: badgeColor),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (body.toString().isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                body.toString(),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.tajawal(fontSize: 13, color: textSecondary),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                        tooltip: 'حذف الإشعار من السحابة',
+                        onPressed: () => _deleteBroadcastNotification(doc.id),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ],
     );
   }
 }

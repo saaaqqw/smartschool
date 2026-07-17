@@ -65,6 +65,71 @@ List<CurriculumUnit> _unitsForSubject(int subjectIndex) {
   );
 }
 
+List<CurriculumUnit> _unitsForSocial() {
+  return [
+    CurriculumUnit(
+      title: 'الجغرافيا',
+      icon: Icons.map_rounded,
+      progress: _demoProgress(4, 0),
+    ),
+    CurriculumUnit(
+      title: 'التربية الوطنية',
+      icon: Icons.flag_rounded,
+      progress: _demoProgress(4, 1),
+    ),
+    CurriculumUnit(
+      title: 'التاريخ',
+      icon: Icons.history_edu_rounded,
+      progress: _demoProgress(4, 2),
+    ),
+  ];
+}
+
+List<CurriculumUnit> _unitsForQuran() {
+  return [
+    CurriculumUnit(
+      title: 'تلاوة وحفظ القرآن',
+      icon: Icons.menu_book_rounded,
+      progress: _demoProgress(6, 0),
+    ),
+    CurriculumUnit(
+      title: 'التفسير',
+      icon: Icons.lightbulb_outline_rounded,
+      progress: _demoProgress(6, 1),
+    ),
+    CurriculumUnit(
+      title: 'التجويد',
+      icon: Icons.record_voice_over_rounded,
+      progress: _demoProgress(6, 2),
+    ),
+  ];
+}
+
+List<CurriculumUnit> _unitsForIslamic() {
+  return [
+    CurriculumUnit(
+      title: 'الإيمان والعقيدة',
+      icon: Icons.stars_rounded,
+      progress: _demoProgress(5, 0),
+    ),
+    CurriculumUnit(
+      title: 'الحديث الشريف',
+      icon: Icons.format_quote_rounded,
+      progress: _demoProgress(5, 1),
+    ),
+    CurriculumUnit(
+      title: 'الفقه والعبادات',
+      icon: Icons.balance_rounded,
+      progress: _demoProgress(5, 2),
+    ),
+    CurriculumUnit(
+      title: 'السيرة النبوية',
+      icon: Icons.mosque_rounded,
+      progress: _demoProgress(5, 3),
+    ),
+  ];
+}
+
 /// المواد الأساسية لمشروع المدرسة الذكية.
 final List<SchoolSubject> kCoreSubjects = [
   SchoolSubject(
@@ -100,20 +165,20 @@ final List<SchoolSubject> kCoreSubjects = [
     title: 'الاجتماعيات',
     color: const Color(0xFF6D4C41),
     icon: Icons.public_rounded,
-    units: _unitsForSubject(4),
+    units: _unitsForSocial(),
   ),
   SchoolSubject(
     subjectId: 'islamic',
     title: 'التربية الإسلامية',
     color: const Color(0xFF6A1B9A),
     icon: Icons.mosque_rounded,
-    units: _unitsForSubject(5),
+    units: _unitsForIslamic(),
   ),
   SchoolSubject(
     subjectId: 'quran',
     title: 'القرآن الكريم',
     color: Colors.amber,
     icon: Icons.menu_book,
-    units: _unitsForSubject(6),
+    units: _unitsForQuran(),
   ),
 ];

@@ -220,14 +220,64 @@ class FirebaseSyncService {
     }
   }
 
-  /// تهيئة جميع المواد في Firestore للصف المحدد ولكلا الفصلين (الأول والثاني).
+  static const List<String> kAllGrades = [
+    'الصف السابع',
+    'الصف الثامن',
+    'الصف التاسع',
+    'الصف العاشر',
+    'الصف الحادي عشر',
+    'الصف الثاني عشر',
+  ];
+
+  /// تهيئة جميع المواد في Firestore لجميع الصفوف ولكلا الفصلين (الأول والثاني).
   static Future<void> initializeAllSubjects({
-    List<String> grades = const ['الصف السابع'],
+    List<String> grades = kAllGrades,
   }) async {
     for (final grade in grades) {
       for (final subject in kCoreSubjects) {
         await ensureSubjectExists(subject, grade: grade, semester: 'الفصل الدراسي الأول');
         await ensureSubjectExists(subject, grade: grade, semester: 'الفصل الدراسي الثاني');
+      }
+    }
+    await syncCurriculumBranchesToFirestore(grades: grades);
+  }
+
+  /// مزامنة وتحديث أسماء فروع المواد في Firestore (الاجتماعيات، التربية الإسلامية، والقرآن الكريم) لجميع الصفوف
+  static Future<void> syncCurriculumBranchesToFirestore({
+    List<String> grades = kAllGrades,
+  }) async {
+    final targetSubjects = kCoreSubjects.where((s) =>
+        s.subjectId == 'social' ||
+        s.subjectId == 'islamic' ||
+        s.subjectId == 'quran');
+
+    for (final grade in grades) {
+      for (final semester in ['الفصل الدراسي الأول', 'الفصل الدراسي الثاني']) {
+        for (final subject in targetSubjects) {
+          final docId = getSubjectDocId(subject.title, grade, semester: semester);
+          final docRef = _db.collection('subjects').doc(docId);
+          final snap = await docRef.get();
+          if (snap.exists) {
+            final data = snap.data();
+            final existingUnits = (data?['units'] as List? ?? []);
+            final updatedUnits = <Map<String, dynamic>>[];
+
+            for (int i = 0; i < subject.units.length; i++) {
+              final branch = subject.units[i];
+              final existingLessons = i < existingUnits.length
+                  ? (existingUnits[i] is Map ? (existingUnits[i]['lessons'] ?? []) : [])
+                  : [];
+              updatedUnits.add({
+                'index': i,
+                'title': branch.title,
+                'lessons': existingLessons,
+              });
+            }
+            await docRef.update({'units': updatedUnits});
+          } else {
+            await ensureSubjectExists(subject, grade: grade, semester: semester);
+          }
+        }
       }
     }
   }

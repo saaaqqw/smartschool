@@ -10,7 +10,7 @@ class StudyTimerState {
     this.elapsed = Duration.zero,
     this.targetMinutes = 120,
     this.isRunning = false,
-    this.isOverlayHidden = false,
+    this.isOverlayHidden = true,
   });
 
   final Duration elapsed;
@@ -80,10 +80,15 @@ class StudyTimerStore extends ValueNotifier<StudyTimerState> {
     value = value.copyWith(elapsed: elapsed);
   }
 
-  /// بدء المؤقت (يكمل من نقطة التوقف الأخيرة)
+  /// بدء المؤقت (يكمل من نقطة التوقف الأخيرة أو يبدأ ويعرض العداد العائم)
   void start() {
-    if (value.isRunning) return;
-    value = value.copyWith(isRunning: true);
+    if (value.isRunning) {
+      if (value.isOverlayHidden) {
+        showOverlay();
+      }
+      return;
+    }
+    value = value.copyWith(isRunning: true, isOverlayHidden: false);
     _notifyChange();
     _tick();
   }

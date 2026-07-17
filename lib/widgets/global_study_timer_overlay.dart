@@ -22,11 +22,26 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
   double _top = 100.0;
   bool _initializedPosition = false;
 
+  // حالة السحب وتداخل العداد مع منطقة الإخفاء بالسفل
+  bool _isDragging = false;
+  bool _isOverDismissZone = false;
+
   String _formatDuration(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
+    final totalSeconds = d.inSeconds;
+    if (totalSeconds < 60) {
+      // أقل من دقيقة: عرض الثواني فقط بصيغة مدمجة صغيرة
+      return '$totalSecondsث';
+    } else if (totalSeconds < 3600) {
+      // من دقيقة إلى 59 دقيقة: عرض الدقائق والثواني
+      final m = d.inMinutes.toString().padLeft(2, '0');
+      final s = (totalSeconds % 60).toString().padLeft(2, '0');
+      return '$m:$s';
+    } else {
+      // ساعة فأكثر: عرض الساعات والدقائق حتى يبقى العداد صغيراً
+      final h = d.inHours;
+      final m = (d.inMinutes % 60).toString().padLeft(2, '0');
+      return '$h:$mس';
+    }
   }
 
   String _formatTarget(int minutes) {
@@ -211,117 +226,223 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
             final scheme = Theme.of(context).colorScheme;
             final elapsedText = _formatDuration(state.elapsed);
 
-            return Positioned(
-              left: _left,
-              top: _top,
-              child: GestureDetector(
-                onPanUpdate: (details) {
-                  setState(() {
-                    _left = (_left + details.delta.dx).clamp(8.0, screenSize.width - 150.0);
-                    _top = (_top + details.delta.dy).clamp(36.0, screenSize.height - 90.0);
-                  });
-                },
-                onTap: () => _showTimerControlsModal(context, state),
-                child: Material(
-                  color: Colors.transparent,
-                  elevation: 6,
-                  shadowColor: Colors.black.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: state.isRunning
-                              ? scheme.primaryContainer.withValues(alpha: 0.95)
-                              : scheme.surfaceContainerHigh.withValues(alpha: 0.95),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: state.isRunning
-                                ? scheme.primary.withValues(alpha: 0.45)
-                                : scheme.outline.withValues(alpha: 0.2),
-                            width: 1.2,
-                          ),
+            return Stack(
+              children: [
+                // ── منطقة الإخفاء بالسفل (تظهر فقط عند سحب العداد) ─────────
+                if (_isDragging)
+                  Positioned(
+                    bottom: 44,
+                    left: 20,
+                    right: 20,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: _isOverDismissZone
+                            ? Colors.red.shade600
+                            : scheme.surfaceContainerHighest.withValues(alpha: 0.94),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: _isOverDismissZone
+                              ? Colors.white
+                              : scheme.outline.withValues(alpha: 0.4),
+                          width: _isOverDismissZone ? 2.2 : 1.2,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // أيقونة الدائرة (نسق مؤقت الخطة الدراسية)
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: state.isRunning
-                                    ? scheme.primary
-                                    : scheme.primary.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.timer_rounded,
-                                size: 15,
-                                color: state.isRunning ? scheme.onPrimary : scheme.primary,
+                        boxShadow: [
+                          BoxShadow(
+                            color: _isOverDismissZone
+                                ? Colors.red.withValues(alpha: 0.45)
+                                : Colors.black.withValues(alpha: 0.16),
+                            blurRadius: _isOverDismissZone ? 20 : 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _isOverDismissZone
+                                ? Icons.delete_forever_rounded
+                                : Icons.delete_outline_rounded,
+                            color: _isOverDismissZone ? Colors.white : scheme.onSurface,
+                            size: _isOverDismissZone ? 26 : 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _isOverDismissZone
+                                ? 'إفلات الآن لإخفاء العداد'
+                                : 'اسحب إلى هنا لإخفاء العداد',
+                            style: GoogleFonts.tajawal(
+                              fontSize: _isOverDismissZone ? 16 : 14.5,
+                              fontWeight: _isOverDismissZone ? FontWeight.w900 : FontWeight.w700,
+                              color: _isOverDismissZone ? Colors.white : scheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // ── كبسولة العداد العائم القابلة للسحب ─────────────────────
+                Positioned(
+                  left: _left,
+                  top: _top,
+                  child: GestureDetector(
+                    onPanStart: (_) {
+                      setState(() {
+                        _isDragging = true;
+                        _isOverDismissZone = false;
+                      });
+                    },
+                    onPanUpdate: (details) {
+                      setState(() {
+                        _left = (_left + details.delta.dx)
+                            .clamp(8.0, screenSize.width - 150.0);
+                        _top = (_top + details.delta.dy)
+                            .clamp(36.0, screenSize.height - 90.0);
+
+                        // التحقق من تداخل العداد مع منطقة الإخفاء بالسفل
+                        final distanceFromBottom = screenSize.height - _top;
+                        _isOverDismissZone = (distanceFromBottom < 135.0) &&
+                            (_left > 10 && _left < screenSize.width - 10);
+                      });
+                    },
+                    onPanEnd: (_) {
+                      if (_isOverDismissZone) {
+                        studyTimerStore.hideOverlay();
+                      }
+                      setState(() {
+                        _isDragging = false;
+                        _isOverDismissZone = false;
+                      });
+                    },
+                    onPanCancel: () {
+                      setState(() {
+                        _isDragging = false;
+                        _isOverDismissZone = false;
+                      });
+                    },
+                    onTap: () => _showTimerControlsModal(context, state),
+                    child: Material(
+                      color: Colors.transparent,
+                      elevation: _isOverDismissZone ? 12 : 6,
+                      shadowColor: _isOverDismissZone
+                          ? Colors.red.withValues(alpha: 0.5)
+                          : Colors.black.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: _isOverDismissZone
+                                  ? Colors.red.shade600
+                                  : (state.isRunning
+                                      ? scheme.primaryContainer.withValues(alpha: 0.95)
+                                      : scheme.surfaceContainerHigh.withValues(alpha: 0.95)),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: _isOverDismissZone
+                                    ? Colors.white
+                                    : (state.isRunning
+                                        ? scheme.primary.withValues(alpha: 0.45)
+                                        : scheme.outline.withValues(alpha: 0.2)),
+                                width: _isOverDismissZone ? 1.8 : 1.2,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            // الوقت المنقضي بخط واضح وحجم مدمج
-                            Text(
-                              elapsedText,
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: scheme.onSurface,
-                                letterSpacing: 0.5,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // أيقونة الدائرة (نسق مؤقت الخطة الدراسية)
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: _isOverDismissZone
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : (state.isRunning
+                                            ? scheme.primary
+                                            : scheme.primary.withValues(alpha: 0.15)),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.timer_rounded,
+                                    size: 15,
+                                    color: _isOverDismissZone
+                                        ? Colors.white
+                                        : (state.isRunning ? scheme.onPrimary : scheme.primary),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // الوقت المنقضي بخط واضح وحجم مدمج
+                                Text(
+                                  elapsedText,
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: _isOverDismissZone ? Colors.white : scheme.onSurface,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // زر التشغيل / الإيقاف المؤقت (مدمج)
+                                GestureDetector(
+                                  onTap: () => studyTimerStore.toggle(),
+                                  child: Container(
+                                    width: 26,
+                                    height: 26,
+                                    decoration: BoxDecoration(
+                                      color: _isOverDismissZone
+                                          ? Colors.white.withValues(alpha: 0.2)
+                                          : (state.isRunning
+                                              ? scheme.tertiaryContainer
+                                              : scheme.primary.withValues(alpha: 0.15)),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      state.isRunning
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                      size: 15,
+                                      color: _isOverDismissZone
+                                          ? Colors.white
+                                          : (state.isRunning ? scheme.onTertiaryContainer : scheme.primary),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                // زر الإخفاء السريع (مدمج)
+                                GestureDetector(
+                                  onTap: () => studyTimerStore.hideOverlay(),
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: _isOverDismissZone
+                                          ? Colors.white.withValues(alpha: 0.3)
+                                          : scheme.errorContainer.withValues(alpha: 0.7),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.close_rounded,
+                                      size: 13,
+                                      color: _isOverDismissZone ? Colors.white : scheme.onErrorContainer,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            // زر التشغيل / الإيقاف المؤقت (مدمج)
-                            GestureDetector(
-                              onTap: () => studyTimerStore.toggle(),
-                              child: Container(
-                                width: 26,
-                                height: 26,
-                                decoration: BoxDecoration(
-                                  color: state.isRunning
-                                      ? scheme.tertiaryContainer
-                                      : scheme.primary.withValues(alpha: 0.15),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  state.isRunning
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                  size: 15,
-                                  color: state.isRunning ? scheme.onTertiaryContainer : scheme.primary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            // زر الإخفاء السريع (مدمج)
-                            GestureDetector(
-                              onTap: () => studyTimerStore.hideOverlay(),
-                              child: Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: scheme.errorContainer.withValues(alpha: 0.7),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: 13,
-                                  color: scheme.onErrorContainer,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
             );
           },
         ),

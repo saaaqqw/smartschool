@@ -104,8 +104,14 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                     if (unitsRaw.isNotEmpty) {
                       displayUnits = unitsRaw.asMap().entries.map((e) {
                         final map = e.value as Map? ?? {};
-                        final title = map['title'] as String? ??
-                            'الوحدة ${e.key + 1}';
+                        String title = map['title'] as String? ?? 'الوحدة ${e.key + 1}';
+                        // إذا كانت المادة مقسمة لفروع دقيقة (الاجتماعيات، القرآن، الإسلامية) نستخدم العنوان الرسمي للفرع دائماً
+                        if (e.key < widget.subject.units.length &&
+                            (widget.subject.subjectId == 'social' ||
+                             widget.subject.subjectId == 'quran' ||
+                             widget.subject.subjectId == 'islamic')) {
+                          title = widget.subject.units[e.key].title;
+                        }
                         return CurriculumUnit(
                           title: title,
                           icon: widget.subject.icon,
