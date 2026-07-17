@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// خدمة إدارة رمز أمان المطورين (PIN Code) لحماية اللوحة الخاصة بهم
@@ -17,6 +18,24 @@ class DeveloperAuthService {
   static Future<bool> verifyPin(String inputPin) async {
     final currentPin = await getSavedPin();
     return inputPin.trim() == currentPin.trim();
+  }
+
+  /// التحقق من أن المستخدم مشرف مصرح له بالدخول (إما عبر البريد الرئيسي للمشرف أو وجوده في جدول admins)
+  static Future<bool> isUserAuthorizedAdmin(String uid, String email) async {
+    // 1. البريد الرئيسي للمشرف الأعلى له صلاحية دائمة
+    if (email.trim().toLowerCase() == 'aaasss@gmail.com') {
+      return true;
+    }
+    // 2. إذا لم يمتلك uid (حساب غير مسجل أو زائر)، يتم رفضه فوراً
+    if (uid.isEmpty) return false;
+
+    // 3. التحقق مما إذا كان حسابه مضافاً في مجموعة المشرفين (admins collection) في Firestore
+    try {
+      final doc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+      return doc.exists && doc.data() != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// يغيّر الرمز السري للمطور إلى رمز جديد

@@ -138,8 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: AppLocalizations.of(context).translate('dark_mode'),
                       value: dark,
                       onChanged: (v) {
-                        appThemeModeNotifier.value =
-                            v ? ThemeMode.dark : ThemeMode.light;
+                        setAndSaveThemeMode(v ? ThemeMode.dark : ThemeMode.light);
                       },
                     );
                   },
@@ -728,14 +727,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       errorNotifier.value = 'يرجى إدخال رمز الأمان';
       return;
     }
-    final isValid = await DeveloperAuthService.verifyPin(pinInput);
-    if (isValid) {
-      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-      if (mounted) {
-        Navigator.of(context).push(DeveloperDashboardScreen.route());
-      }
-    } else {
+    final isValidPin = await DeveloperAuthService.verifyPin(pinInput);
+    if (!isValidPin) {
       errorNotifier.value = 'رمز الدخول غير صحيح، حاول مجدداً';
+      return;
+    }
+
+    // التحقق من أن الحساب يمتلك صلاحية مشرف في قاعدة البيانات أو أنه الحساب الرئيسي
+    final profile = userProfileNotifier.value;
+    final isAuthorizedAdmin = await DeveloperAuthService.isUserAuthorizedAdmin(
+      profile.uid,
+      profile.email,
+    );
+
+    if (!isAuthorizedAdmin) {
+      errorNotifier.value =
+          'عذراً، حسابك الحالي ليس بصلاحية (مشرف). لا يمكنك الدخول لشاشة المطور حتى وإن كان الرمز صحيحاً.';
+      return;
+    }
+
+    if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+    if (mounted) {
+      Navigator.of(context).push(DeveloperDashboardScreen.route());
     }
   }
 

@@ -1334,6 +1334,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
                           // حقل تعديل اسم الوحدة وحفظه في قواعد البيانات + زر حذف الوحدة
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Expanded(
                                 child: _buildTextFormField(
@@ -1367,55 +1368,50 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                           const SizedBox(height: 16),
 
                           // اختيار رقم الدرس والدروس المتاحة في قاعدة البيانات + عنوان الدرس
-                          Row(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(
-                                flex: 2,
-                                child: _buildDropdownField<int>(
-                                  label: 'اختر الدرس (من قاعدة البيانات)',
-                                  value: _selectedLessonNumber <= maxLessonOptions
-                                      ? _selectedLessonNumber
-                                      : 1,
-                                  items: List.generate(
-                                      maxLessonOptions, (index) => index + 1),
-                                  itemLabelBuilder: (n) {
-                                    if (n <= dbLessons.length) {
-                                      final t = dbLessons[n - 1]['title']
-                                              as String? ??
-                                          '';
-                                      return t.isNotEmpty
-                                          ? 'الدرس $n: $t'
-                                          : 'الدرس رقم $n';
-                                    }
-                                    return '+ إضافة الدرس $n (جديد)';
-                                  },
-                                  onChanged: (v) {
-                                    if (v != null) {
-                                      setState(() => _selectedLessonNumber = v);
-                                      _loadLessonFromDb(v, dbUnits);
-                                    }
-                                  },
-                                  cardBgColor: cardBgColor,
-                                  borderColor: borderColor,
-                                  textPrimary: textPrimary,
-                                  textSecondary: textSecondary,
-                                ),
+                              _buildDropdownField<int>(
+                                label: 'اختر الدرس (من قاعدة البيانات)',
+                                value: _selectedLessonNumber <= maxLessonOptions
+                                    ? _selectedLessonNumber
+                                    : 1,
+                                items: List.generate(
+                                    maxLessonOptions, (index) => index + 1),
+                                itemLabelBuilder: (n) {
+                                  if (n <= dbLessons.length) {
+                                    final t = dbLessons[n - 1]['title']
+                                            as String? ??
+                                        '';
+                                    return t.isNotEmpty
+                                        ? 'الدرس $n: $t'
+                                        : 'الدرس رقم $n';
+                                  }
+                                  return '+ إضافة الدرس $n (جديد)';
+                                },
+                                onChanged: (v) {
+                                  if (v != null) {
+                                    setState(() => _selectedLessonNumber = v);
+                                    _loadLessonFromDb(v, dbUnits);
+                                  }
+                                },
+                                cardBgColor: cardBgColor,
+                                borderColor: borderColor,
+                                textPrimary: textPrimary,
+                                textSecondary: textSecondary,
                               ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                flex: 3,
-                                child: _buildTextFormField(
-                                  label: 'عنوان الدرس (اسم الموضوع)',
-                                  controller: _lessonTitleController,
-                                  hint: 'مثال: سورة الفاتحة / قوانين نيوتن',
-                                  validator: (v) =>
-                                      v == null || v.trim().isEmpty
-                                          ? 'يرجى إدخال عنوان الدرس'
-                                          : null,
-                                  borderColor: borderColor,
-                                  textPrimary: textPrimary,
-                                  textSecondary: textSecondary,
-                                ),
+                              const SizedBox(height: 14),
+                              _buildTextFormField(
+                                label: 'عنوان الدرس (اسم الموضوع)',
+                                controller: _lessonTitleController,
+                                hint: 'مثال: سورة الفاتحة / قوانين نيوتن',
+                                validator: (v) =>
+                                    v == null || v.trim().isEmpty
+                                        ? 'يرجى إدخال عنوان الدرس'
+                                        : null,
+                                borderColor: borderColor,
+                                textPrimary: textPrimary,
+                                textSecondary: textSecondary,
                               ),
                             ],
                           ),
@@ -1674,12 +1670,14 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                     const Icon(Icons.list_alt_rounded,
                         color: Colors.amberAccent, size: 20),
                     const SizedBox(width: 8),
-                    Text(
-                      'الأسئلة المحفوظة في قاعدة البيانات لهذا الدرس (${_tempQuestionsList.length}):',
-                      style: GoogleFonts.tajawal(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: textPrimary,
+                    Expanded(
+                      child: Text(
+                        'الأسئلة المحفوظة في قاعدة البيانات لهذا الدرس (${_tempQuestionsList.length}):',
+                        style: GoogleFonts.tajawal(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: textPrimary,
+                        ),
                       ),
                     ),
                   ],
@@ -1731,93 +1729,103 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                           width: isEditingThis ? 2 : 1,
                         ),
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        leading: CircleAvatar(
-                          backgroundColor: isEditingThis
-                              ? Colors.amberAccent
-                              : accentColor,
-                          foregroundColor: isEditingThis
-                              ? Colors.black
-                              : Colors.white,
-                          child: Text(
-                            '${index + 1}',
-                            style: GoogleFonts.tajawal(
-                                fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                        ),
-                        title: Text(
-                          q.questionText,
-                          style: GoogleFonts.tajawal(
-                            color: textPrimary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'الخيارات: ${q.options.asMap().entries.map((e) => "(${letters[e.key]}) ${e.value}").join("  |  ")}',
-                                style: GoogleFonts.tajawal(
-                                  color: textSecondary,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: accentColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '✔ الإجابة الصحيحة: (${letters[q.correctIndex]}) ${q.options[q.correctIndex]}',
-                                  style: GoogleFonts.tajawal(
-                                    color: accentColor,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: isEditingThis
+                                      ? Colors.amberAccent
+                                      : accentColor,
+                                  foregroundColor: isEditingThis
+                                      ? Colors.black
+                                      : Colors.white,
+                                  radius: 16,
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: GoogleFonts.tajawal(
+                                        fontWeight: FontWeight.bold, fontSize: 15),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_rounded,
-                                  color: Colors.amberAccent, size: 20),
-                              tooltip: 'تعديل هذا السؤال في قاعدة البيانات',
-                              onPressed: () {
-                                setState(() {
-                                  _qTextController.text = q.questionText;
-                                  _qOptAController.text =
-                                      q.options.isNotEmpty ? q.options[0] : '';
-                                  _qOptBController.text =
-                                      q.options.length > 1 ? q.options[1] : '';
-                                  _qOptCController.text =
-                                      q.options.length > 2 ? q.options[2] : '';
-                                  _qOptDController.text =
-                                      q.options.length > 3 ? q.options[3] : '';
-                                  _qCorrectIndex = q.correctIndex;
-                                  _editingQuestionIndex = index;
-                                });
-                                _showSnackBar(
-                                    'قم بتعديل السؤال في الحقول أعلاه ثم اضغط على "حفظ تعديل السؤال في قاعدة البيانات مباشرة (✓)" ✏️');
-                              },
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    q.questionText,
+                                    style: GoogleFonts.tajawal(
+                                      color: textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_rounded,
+                                          color: Colors.amberAccent, size: 20),
+                                      tooltip: 'تعديل هذا السؤال في قاعدة البيانات',
+                                      constraints: const BoxConstraints(),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                      onPressed: () {
+                                        setState(() {
+                                          _qTextController.text = q.questionText;
+                                          _qOptAController.text =
+                                              q.options.isNotEmpty ? q.options[0] : '';
+                                          _qOptBController.text =
+                                              q.options.length > 1 ? q.options[1] : '';
+                                          _qOptCController.text =
+                                              q.options.length > 2 ? q.options[2] : '';
+                                          _qOptDController.text =
+                                              q.options.length > 3 ? q.options[3] : '';
+                                          _qCorrectIndex = q.correctIndex;
+                                          _editingQuestionIndex = index;
+                                        });
+                                        _showSnackBar(
+                                            'قم بتعديل السؤال في الحقول أعلاه ثم اضغط على "حفظ تعديل السؤال في قاعدة البيانات مباشرة (✓)" ✏️');
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded,
+                                          color: Colors.redAccent, size: 20),
+                                      tooltip: 'حذف السؤال مباشرة من قاعدة البيانات',
+                                      constraints: const BoxConstraints(),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                      onPressed: () =>
+                                          _deleteQuestionFromFirestoreImmediately(index),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded,
-                                  color: Colors.redAccent, size: 20),
-                              tooltip: 'حذف السؤال مباشرة من قاعدة البيانات',
-                              onPressed: () =>
-                                  _deleteQuestionFromFirestoreImmediately(index),
+                            const SizedBox(height: 10),
+                            Text(
+                              'الخيارات: ${q.options.asMap().entries.map((e) => "(${letters[e.key]}) ${e.value}").join("  |  ")}',
+                              style: GoogleFonts.tajawal(
+                                color: textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: accentColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '✔ الإجابة الصحيحة: (${letters[q.correctIndex]}) ${q.options[q.correctIndex]}',
+                                style: GoogleFonts.tajawal(
+                                  color: accentColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -2104,14 +2112,26 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(name, style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                                          Text('UID: $uid', style: GoogleFonts.tajawal(color: textSecondary, fontSize: 11)),
+                                          Text(
+                                            name,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                          Text(
+                                            'UID: $uid',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.tajawal(color: textSecondary, fontSize: 11),
+                                          ),
                                         ],
                                       ),
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
                                       tooltip: 'سحب الصلاحية',
+                                      constraints: const BoxConstraints(),
+                                      padding: const EdgeInsets.all(6),
                                       onPressed: () => _deleteAdmin(uid, name),
                                     ),
                                   ],
@@ -2185,6 +2205,8 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       children: [
         Text(
           label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.tajawal(
             fontSize: 13,
             fontWeight: FontWeight.w700,
@@ -2250,6 +2272,8 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       children: [
         Text(
           label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.tajawal(
             fontSize: 13,
             fontWeight: FontWeight.w700,

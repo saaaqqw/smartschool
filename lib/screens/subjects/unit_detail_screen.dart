@@ -108,82 +108,8 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: widget.subject.color.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(
-            Icons.school_rounded,
-            color: widget.subject.color,
-          ),
-        ),
-        title: Text(
-          lessonTitle,
-          style: GoogleFonts.tajawal(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: scheme.onSurface,
-          ),
-        ),
-        subtitle: Row(
-          children: [
-            Text(
-              'شاهد الدرس + حدده كمكتمل',
-              style: GoogleFonts.tajawal(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-            if (lessonGrade > 0) ...[
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: widget.subject.color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'الدرجة: $pctScore%',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: widget.subject.color,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        trailing: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: 'فتح صفحة الدرس',
-              icon: const Icon(Icons.play_circle_outline_rounded),
-              color: widget.subject.color,
-              onPressed: _isUpdating
-                  ? null
-                  : () {
-                      Navigator.of(context).push(
-                        LessonDetailScreen.route(
-                          subject: widget.subject,
-                          unit: widget.unit,
-                          lessonNumber: lessonNumber,
-                          videoId: videoId,
-                          subjectDocId: subjectDocId,
-                          unitIndex: unitIndex,
-                        ),
-                      );
-                    },
-            ),
-          ],
-        ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           Navigator.of(context).push(
             LessonDetailScreen.route(
@@ -196,6 +122,98 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
             ),
           );
         },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: widget.subject.color.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.school_rounded,
+                  color: widget.subject.color,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      lessonTitle,
+                      style: GoogleFonts.tajawal(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'شاهد الدرس + حدده كمكتمل',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (lessonGrade > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: widget.subject.color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'الدرجة: $pctScore%',
+                              style: GoogleFonts.tajawal(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: widget.subject.color,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'فتح صفحة الدرس',
+                icon: const Icon(Icons.play_circle_outline_rounded, size: 26),
+                color: widget.subject.color,
+                constraints: const BoxConstraints(),
+                padding: const EdgeInsets.all(6),
+                onPressed: _isUpdating
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          LessonDetailScreen.route(
+                            subject: widget.subject,
+                            unit: widget.unit,
+                            lessonNumber: lessonNumber,
+                            videoId: videoId,
+                            subjectDocId: subjectDocId,
+                            unitIndex: unitIndex,
+                          ),
+                        );
+                      },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

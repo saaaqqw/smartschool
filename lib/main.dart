@@ -34,6 +34,7 @@ Future<void> main() async {
 
   await loadUserProfile();
   await loadLocale();
+  await loadTheme();
 
   // ── تهيئة Firebase عند وجود مستخدم مسجّل ────────────────────
   final uid = userProfileNotifier.value.uid;

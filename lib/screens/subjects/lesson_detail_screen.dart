@@ -906,12 +906,14 @@ class _LessonSummaryCard extends StatelessWidget {
                           size: 15,
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          'درس منجز — الملخص معروض بصفة دائمة',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.green.shade600,
+                        Expanded(
+                          child: Text(
+                            'درس منجز — الملخص معروض بصفة دائمة',
+                            style: GoogleFonts.tajawal(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.green.shade600,
+                            ),
                           ),
                         ),
                       ],
