@@ -26,6 +26,7 @@ class QuickQuizScreen extends StatefulWidget {
     // معاملات الهوية الجديدة لحفظ الدرجة
     this.subjectDocId = '',
     this.lessonDocId = '',
+    this.unitIndex,
     this.previousBestScore = 0.0,
   });
 
@@ -40,6 +41,9 @@ class QuickQuizScreen extends StatefulWidget {
   /// معرّف الدرس في Firestore (لحفظ الدرجة)
   final String lessonDocId;
 
+  /// رقم الوحدة (لحفظ الدرجة بشكل مستقل لكل وحدة)
+  final int? unitIndex;
+
   /// أعلى درجة سبق للطالب تحقيقها في هذا الدرس
   final double previousBestScore;
 
@@ -50,6 +54,7 @@ class QuickQuizScreen extends StatefulWidget {
     required List<QuizQuestionModel> questions,
     String subjectDocId = '',
     String lessonDocId = '',
+    int? unitIndex,
     double previousBestScore = 0.0,
   }) {
     return PageRouteBuilder<void>(
@@ -60,6 +65,7 @@ class QuickQuizScreen extends StatefulWidget {
         questions: questions,
         subjectDocId: subjectDocId,
         lessonDocId: lessonDocId,
+        unitIndex: unitIndex,
         previousBestScore: previousBestScore,
       ),
       transitionsBuilder: (_, animation, __, child) => SlideTransition(
@@ -160,6 +166,7 @@ class _QuickQuizScreenState extends State<QuickQuizScreen>
           final updated = await _lessonSvc.saveBestScore(
             subjectId: widget.subjectDocId,
             lessonId: widget.lessonDocId,
+            unitIndex: widget.unitIndex,
             newScore: newScore,
           );
           if (mounted) setState(() => _isNewRecord = updated);

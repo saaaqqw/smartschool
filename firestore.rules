@@ -2,51 +2,42 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─── قواعد المستخدمين ─────────────────────────────────────
+    // ─── قواعد المستخدمين والمجموعات الفرعية ──────────────────────
     match /users/{uid} {
-      // كل مستخدم يقرأ ويكتب بياناته فقط
+      // كل مستخدم يقرأ ويكتب بياناته في المستند الرئيسي
       allow read, write: if request.auth != null && request.auth.uid == uid;
 
-      // تقدم الدروس — القراءة والكتابة للمستخدم نفسه فقط
-      match /progress/{subjectTitle} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
-      }
-
-      // المهام اليومية — القراءة والكتابة للمستخدم نفسه فقط
-      match /daily_tasks/{taskId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
-      }
-
-      // الخطة الدراسية — القراءة والكتابة للمستخدم نفسه فقط
-      match /study_plan/{taskId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
-      }
-
-      // جلسات الدراسة ووقت المؤقت — للمستخدم نفسه فقط
-      match /study_sessions/{sessionId} {
+      // تشمل كل المجموعات الفرعية داخل حساب المستخدم (مثل: progress, study_plan, timer_state، إلخ)
+      match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }
 
-    // دالة التحقق من صلاحية المشرف / المطور
+    // دالة التحقق من المشرف السوبر (يحق له إضافة المشرفين وتغيير الـ API)
+    function isSuperAdmin() {
+      return request.auth != null && request.auth.token.email == 'sqralqady63@gmail.com';
+    }
+
+    // دالة التحقق من صلاحية المشرف المساعد / المطور
     function isAdmin() {
       return request.auth != null && (
+        isSuperAdmin() ||
         request.auth.token.admin == true ||
-        request.auth.token.email in ['aaasss@gmail.com', 'admin@smartschool.com', 'developer@smartschool.com'] ||
+        request.auth.token.email in ['admin@smartschool.com', 'developer@smartschool.com'] ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
 
     // ─── المشرفون (Admins) ──────────────────────────────────────
     match /admins/{adminUid} {
-      allow read: if request.auth != null && (request.auth.uid == adminUid || isAdmin());
-      allow write: if isAdmin();
+      allow read: if request.auth != null && (request.auth.uid == adminUid || isSuperAdmin());
+      allow write: if isSuperAdmin(); // السوبر فقط يضيف مشرفين
     }
 
     // ─── إعدادات النظام و AiConfig ──────────────────────────────
     match /settings/{docId} {
       allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin(); // السوبر فقط يغير الإعدادات
     }
 
     // ─── المواد الدراسية (للجميع قراءة، للمشرفين كتابة) ─────────
@@ -78,6 +69,11 @@ service cloud.firestore {
       }
     }
 
+    // ─── الإشعارات (للجميع قراءة، للمشرفين كتابة) ─────────────────
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
 
     // ─── الدرجات — للمستخدم نفسه فقط ────────────────────────────
     match /grades/{gradeId} {

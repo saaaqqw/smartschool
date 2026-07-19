@@ -20,10 +20,19 @@ class DeveloperAuthService {
     return inputPin.trim() == currentPin.trim();
   }
 
+  /// البريد الإلكتروني للمشرف الرئيسي السوبر (الذي يحق له إضافة مشرفين آخرين أو تغيير الإعدادات الحساسة)
+  static const String superAdminEmail = 'sqralqady63@gmail.com';
+
+  /// التحقق المباشر من أن المستخدم الحالي هو المشرف الرئيسي (Super Admin)
+  static bool isSuperAdmin(String? email) {
+    if (email == null || email.trim().isEmpty) return false;
+    return email.trim().toLowerCase() == superAdminEmail.toLowerCase();
+  }
+
   /// التحقق من أن المستخدم مشرف مصرح له بالدخول (إما عبر البريد الرئيسي للمشرف أو وجوده في جدول admins)
   static Future<bool> isUserAuthorizedAdmin(String uid, String email) async {
     // 1. البريد الرئيسي للمشرف الأعلى له صلاحية دائمة
-    if (email.trim().toLowerCase() == 'aaasss@gmail.com') {
+    if (isSuperAdmin(email)) {
       return true;
     }
     // 2. إذا لم يمتلك uid (حساب غير مسجل أو زائر)، يتم رفضه فوراً

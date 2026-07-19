@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/ai_config_service.dart';
 
 /// Chat bot screen using Groq Llama3 model.
@@ -79,6 +80,21 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<String> _generateReply(String userText) async {
+    // 1. توليد مفتاح فريد مشفر للكاش بناءً على نص السؤال والمادة
+    final rawKey = 'ai_cache_${widget.subjectTitle ?? "general"}_$userText';
+    final cacheKey = base64UrlEncode(utf8.encode(rawKey));
+
+    // 2. التحقق من وجود إجابة مسبقة في الكاش المحلي (للسرعة وتوفير البيانات)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedResponse = prefs.getString(cacheKey);
+      if (cachedResponse != null && cachedResponse.isNotEmpty) {
+        return cachedResponse; // إرجاع الإجابة الفورية من الكاش!
+      }
+    } catch (e) {
+      debugPrint('Cache read error: $e');
+    }
+
     final prompt = [
       'أنت مساعد تعليمي ذكي للطلاب في تطبيق Smart School. اشرح لي دائماً باللغة العربية بشكل مبسط ومنظم.',
       if (widget.subjectTitle != null && widget.subjectTitle!.trim().isNotEmpty)
@@ -119,7 +135,17 @@ class _ChatScreenState extends State<ChatScreen> {
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         final content = decoded['choices'][0]['message']['content'] as String;
-        return content.trim();
+        final finalReply = content.trim();
+
+        // 3. حفظ الإجابة الناجحة في الكاش للاستخدام المستقبلي
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(cacheKey, finalReply);
+        } catch (e) {
+          debugPrint('Cache save error: $e');
+        }
+
+        return finalReply;
       } else {
         debugPrint('Groq API Error: ${response.statusCode} - ${response.body}');
         return 'عذراً، فشل الحصول على رد حالياً. رمز الخطأ: ${response.statusCode}';

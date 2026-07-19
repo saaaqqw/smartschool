@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,6 +7,7 @@ import '../../services/database_cleanup_service.dart';
 import '../../core/config/ai_config_service.dart';
 import '../../core/config/developer_auth_service.dart';
 import '../../services/firebase_sync_service.dart';
+import '../../core/stores/user_profile_store.dart';
 
 /// نموذج يمثل سؤالاً مضافاً إلى القائمة المؤقتة قبل رفعه لـ Firestore
 class TempQuestionItem {
@@ -709,6 +711,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
         final unitMap =
             Map<String, dynamic>.from(unitsList[_selectedUnitIndex] as Map? ?? {});
+
         final lessonsList = List<dynamic>.from(unitMap['lessons'] as List? ?? []);
         final lessonIndex = _selectedLessonNumber - 1;
         while (lessonsList.length <= lessonIndex) {
@@ -1113,6 +1116,86 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     });
   }
 
+  // ── استيراد أسئلة عبر ملف JSON ──
+  void _showJsonImportDialog() {
+    final jsonController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.data_object_rounded, color: Colors.blueAccent),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'استيراد أسئلة (JSON)',
+                style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: TextField(
+            controller: jsonController,
+            maxLines: 10,
+            textDirection: TextDirection.ltr,
+            style: GoogleFonts.robotoMono(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: '[\n  {\n    "questionText": "سؤال؟",\n    "options": ["A","B","C","D"],\n    "correctIndex": 0\n  }\n]',
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+              filled: true,
+              fillColor: const Color(0xFF0F172A),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('إلغاء', style: GoogleFonts.tajawal(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+            onPressed: () {
+              try {
+                final jsonStr = jsonController.text.trim();
+                if (jsonStr.isEmpty) return;
+                final List<dynamic> parsedList = json.decode(jsonStr);
+                int addedCount = 0;
+                for (var item in parsedList) {
+                  if (item is Map<String, dynamic>) {
+                    final qText = item['questionText']?.toString() ?? '';
+                    final optsList = item['options'] as List<dynamic>? ?? [];
+                    final opts = optsList.map((e) => e.toString()).toList();
+                    final cIndex = int.tryParse(item['correctIndex']?.toString() ?? '0') ?? 0;
+                    if (qText.isNotEmpty && opts.isNotEmpty) {
+                      setState(() {
+                        _tempQuestionsList.add(TempQuestionItem(
+                          questionText: qText,
+                          options: opts,
+                          correctIndex: cIndex,
+                        ));
+                      });
+                      addedCount++;
+                    }
+                  }
+                }
+                Navigator.of(ctx).pop();
+                _showSnackBar('تم استيراد $addedCount سؤال بنجاح! 📥', isError: false);
+              } catch (e) {
+                _showSnackBar('خطأ في تنسيق JSON. يرجى التأكد من صحة الكود.', isError: true);
+              }
+            },
+            child: Text('استيراد الآن', style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1145,9 +1228,12 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           children: [
             const Icon(Icons.security_rounded, color: Color(0xFF10B981)),
             const SizedBox(width: 10),
-            Text(
-              'تغيير رمز دخول المطور',
-              style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            Expanded(
+              child: Text(
+                'تغيير رمز دخول المطور',
+                style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -1258,6 +1344,9 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     const textPrimary = Color(0xFFF8FAFC);
     const textSecondary = Color(0xFF94A3B8);
 
+    final currentUserEmail = userProfileNotifier.value.email;
+    final isSuperAdmin = DeveloperAuthService.isSuperAdmin(currentUserEmail);
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
@@ -1266,26 +1355,29 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
         surfaceTintColor: Colors.transparent,
         iconTheme: const IconThemeData(color: textPrimary),
         title: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.school_rounded, color: accentColor, size: 24),
             const SizedBox(width: 8),
-            Text(
-              'لوحة المطور / المعلم (إدارة الدروس)',
-              style: GoogleFonts.tajawal(
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                color: textPrimary,
+            Flexible(
+              child: Text(
+                'لوحة المطور / المعلم (إدارة الدروس)',
+                style: GoogleFonts.tajawal(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings_rounded, color: accentColor),
-            tooltip: 'تغيير رمز دخول المطور',
-            onPressed: () => _showChangePinDialog(context),
-          ),
+          if (isSuperAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings_rounded, color: accentColor),
+              tooltip: 'تغيير رمز دخول المطور',
+              onPressed: () => _showChangePinDialog(context),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: textSecondary),
             tooltip: 'تفريغ الحقول',
@@ -1841,6 +1933,31 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 ),
               ),
 
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _showJsonImportDialog,
+                  icon: const Icon(Icons.data_object_rounded, color: Colors.blueAccent, size: 20),
+                  label: Text(
+                    'استيراد أسئلة متعددة عبر نص JSON 📥',
+                    style: GoogleFonts.tajawal(
+                      color: Colors.blueAccent,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.blueAccent, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 16),
 
               // ── عرض الأسئلة المحفوظة في قاعدة البيانات للدرس الحالي في ListTile ──────────
@@ -2084,7 +2201,8 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
               const SizedBox(height: 24),
 
               // ── قسم إعدادات الذكاء الاصطناعي ────────────────────────────────
-              _buildSectionHeader(
+              if (isSuperAdmin) ...[
+                _buildSectionHeader(
                 icon: Icons.smart_toy_rounded,
                 title: 'إعدادات الذكاء الاصطناعي (AI Config & Groq Key)',
                 accentColor: const Color(0xFF10B981),
@@ -2159,10 +2277,12 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                   ),
                 ),
               ),
+              ],
 
               const SizedBox(height: 24),
               // ── قسم إدارة المشرفين والصلاحيات ────────────────────────────────
-              _buildSectionHeader(
+              if (isSuperAdmin) ...[
+                _buildSectionHeader(
                 icon: Icons.admin_panel_settings_rounded,
                 title: 'إدارة المشرفين والصلاحيات السحابية (Admins)',
                 accentColor: const Color(0xFF3B82F6), // Blue Accent
@@ -2326,6 +2446,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                   ),
                 ),
               ),
+              ],
 
               const SizedBox(height: 40),
             ],
@@ -2713,12 +2834,15 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                       color: _dashboardTab == 0 ? Colors.white : textSecondary,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      '📚 إدارة المناهج والدروس',
-                      style: GoogleFonts.tajawal(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        color: _dashboardTab == 0 ? Colors.white : textSecondary,
+                    Flexible(
+                      child: Text(
+                        '📚 إدارة المناهج والدروس',
+                        style: GoogleFonts.tajawal(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: _dashboardTab == 0 ? Colors.white : textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -2746,12 +2870,15 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                       color: _dashboardTab == 1 ? Colors.white : textSecondary,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      '📢 مركز بث الإشعارات للطلاب',
-                      style: GoogleFonts.tajawal(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        color: _dashboardTab == 1 ? Colors.white : textSecondary,
+                    Flexible(
+                      child: Text(
+                        '📢 مركز بث الإشعارات للطلاب',
+                        style: GoogleFonts.tajawal(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: _dashboardTab == 1 ? Colors.white : textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

@@ -106,12 +106,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         questions = await _lessonSvc.fetchRandomizedQuestions(
           subjectId: widget.subjectDocId,
           lessonId: _lessonDocId,
+          unitIndex: widget.unitIndex,
           limit: _kQuizLimit,
         );
         if (questions.isNotEmpty) {
           prevBest = await _lessonSvc.fetchLessonGrade(
             subjectId: widget.subjectDocId,
             lessonId: _lessonDocId,
+            unitIndex: widget.unitIndex,
           );
         }
         if (questions.isEmpty) {
@@ -151,6 +153,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             questions: _cachedQuestions,
             subjectDocId: widget.subjectDocId,
             lessonDocId: _lessonDocId,
+            unitIndex: widget.unitIndex,
             previousBestScore: _cachedPrevBest,
           ),
         );
@@ -176,6 +179,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         _cachedQuestions = await _lessonSvc.fetchRandomizedQuestions(
           subjectId: widget.subjectDocId,
           lessonId: _lessonDocId,
+          unitIndex: widget.unitIndex,
           limit: _kQuizLimit,
         );
         if (_cachedQuestions.isEmpty) {
@@ -239,6 +243,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             questions: _cachedQuestions,
             subjectDocId: widget.subjectDocId,
             lessonDocId: _lessonDocId,
+            unitIndex: widget.unitIndex,
             previousBestScore: _cachedPrevBest,
           ),
         );
@@ -416,6 +421,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         questions: questions,
                         subjectDocId: widget.subjectDocId,
                         lessonDocId: _lessonDocId,
+                        unitIndex: widget.unitIndex,
                         previousBestScore: prevBest,
                       ),
                     );
@@ -676,6 +682,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                   color: widget.subject.color,
                   scheme: scheme,
                   lessonSvc: _lessonSvc,
+                  unitIndex: widget.unitIndex,
                 ),
 
               const SizedBox(height: 18),
@@ -759,6 +766,7 @@ class _BestScoreBanner extends StatelessWidget {
     required this.color,
     required this.scheme,
     required this.lessonSvc,
+    required this.unitIndex,
   });
 
   final String subjectDocId;
@@ -766,6 +774,7 @@ class _BestScoreBanner extends StatelessWidget {
   final Color color;
   final ColorScheme scheme;
   final LessonService lessonSvc;
+  final int? unitIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -773,6 +782,7 @@ class _BestScoreBanner extends StatelessWidget {
       future: lessonSvc.fetchLessonGrade(
         subjectId: subjectDocId,
         lessonId: lessonDocId,
+        unitIndex: unitIndex,
       ),
       builder: (_, snap) {
         final grade = snap.data ?? 0.0;

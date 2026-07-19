@@ -161,6 +161,7 @@ class LessonService {
   Future<List<QuizQuestionModel>> fetchRandomizedQuestions({
     required String subjectId,
     required String lessonId,
+    int? unitIndex,
     int limit = 10,
   }) async {
     final lessonNum = _parseLessonNum(lessonId);
@@ -171,10 +172,9 @@ class LessonService {
     final unitsRaw = doc.data()!['units'] as List? ?? [];
     List<QuizQuestionModel> all = [];
 
-    // البحث في كافة الوحدات عن الدرس بالرقم المحدد أو المباشر
-    for (int uIdx = 0; uIdx < unitsRaw.length; uIdx++) {
-      if (unitsRaw[uIdx] is Map) {
-        final uMap = unitsRaw[uIdx] as Map;
+    if (unitIndex != null && unitIndex >= 0 && unitIndex < unitsRaw.length) {
+      if (unitsRaw[unitIndex] is Map) {
+        final uMap = unitsRaw[unitIndex] as Map;
         final lList = uMap['lessons'] as List? ?? [];
         if (lessonNum - 1 < lList.length && lList[lessonNum - 1] is Map) {
           final lMap = lList[lessonNum - 1] as Map;
@@ -185,7 +185,25 @@ class LessonService {
               all.add(QuizQuestionModel.fromMap('q_$qIdx', qMap));
             }
           }
-          break; // تم العثور على الدرس وأسئلته بنجاح
+        }
+      }
+    } else {
+      // البحث في كافة الوحدات كحل بديل في حال لم يتم تمرير unitIndex
+      for (int uIdx = 0; uIdx < unitsRaw.length; uIdx++) {
+        if (unitsRaw[uIdx] is Map) {
+          final uMap = unitsRaw[uIdx] as Map;
+          final lList = uMap['lessons'] as List? ?? [];
+          if (lessonNum - 1 < lList.length && lList[lessonNum - 1] is Map) {
+            final lMap = lList[lessonNum - 1] as Map;
+            final qList = lMap['questions'] as List? ?? [];
+            for (int qIdx = 0; qIdx < qList.length; qIdx++) {
+              if (qList[qIdx] is Map) {
+                final qMap = Map<String, dynamic>.from(qList[qIdx] as Map);
+                all.add(QuizQuestionModel.fromMap('q_$qIdx', qMap));
+              }
+            }
+            break; // تم العثور على الدرس وأسئلته بنجاح
+          }
         }
       }
     }
@@ -208,9 +226,11 @@ class LessonService {
   Future<bool> saveBestScore({
     required String subjectId,
     required String lessonId,
+    int? unitIndex,
     required double newScore,
   }) async {
     final lessonNum = _parseLessonNum(lessonId);
+    final String scoreKey = unitIndex != null ? 'u${unitIndex}_l$lessonNum' : '$lessonNum';
     final uid = userProfileNotifier.value.uid;
     if (uid.isEmpty) return false;
 
@@ -225,9 +245,9 @@ class LessonService {
         lessonScores = Map<String, dynamic>.from(gradesSnap.data()!['lessonScores'] as Map? ?? {});
       }
 
-      final currentLessonScore = (lessonScores['$lessonNum'] as num?)?.toDouble() ?? 0.0;
-      if (newScore > currentLessonScore || !lessonScores.containsKey('$lessonNum')) {
-        lessonScores['$lessonNum'] = newScore;
+      final currentLessonScore = (lessonScores[scoreKey] as num?)?.toDouble() ?? 0.0;
+      if (newScore > currentLessonScore || !lessonScores.containsKey(scoreKey)) {
+        lessonScores[scoreKey] = newScore;
       } else {
         // الدرجة الحالية أفضل أو مساوية، لا داعي للتحديث
         return true;
@@ -264,16 +284,18 @@ class LessonService {
   Future<double> fetchLessonGrade({
     required String subjectId,
     required String lessonId,
+    int? unitIndex,
   }) async {
     final lessonNum = _parseLessonNum(lessonId);
+    final String scoreKey = unitIndex != null ? 'u${unitIndex}_l$lessonNum' : '$lessonNum';
     final uid = userProfileNotifier.value.uid;
     if (uid.isNotEmpty) {
       final cleanTitle = subjectId.split(' - ').first;
       final gradeDoc = await _db.collection('grades').doc('${uid}_$cleanTitle').get();
       if (gradeDoc.exists && gradeDoc.data() != null) {
         final scores = gradeDoc.data()!['lessonScores'] as Map? ?? {};
-        if (scores.containsKey('$lessonNum')) {
-          return (scores['$lessonNum'] as num?)?.toDouble() ?? 0.0;
+        if (scores.containsKey(scoreKey)) {
+          return (scores[scoreKey] as num?)?.toDouble() ?? 0.0;
         }
       }
     }
