@@ -273,6 +273,65 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
+  Future<List<QuizQuestionModel>> _fetchQuestionsLegacy() async {
+    try {
+      final db = FirebaseFirestore.instance;
+      var subjDoc = await db.collection('subjects').doc(widget.subjectDocId).get();
+      if (!subjDoc.exists || subjDoc.data() == null) {
+        subjDoc = await db.collection('subjects').doc(widget.subject.subjectId).get();
+      }
+
+      if (subjDoc.exists && subjDoc.data() != null) {
+        final unitsRaw = subjDoc.data()!['units'] as List? ?? [];
+        if (widget.unitIndex != null && widget.unitIndex! >= 0 && widget.unitIndex! < unitsRaw.length) {
+          if (unitsRaw[widget.unitIndex!] is Map) {
+            final uMap = unitsRaw[widget.unitIndex!] as Map;
+            final lList = uMap['lessons'] as List? ?? [];
+            if (widget.lessonNumber - 1 < lList.length && lList[widget.lessonNumber - 1] is Map) {
+              final lMap = lList[widget.lessonNumber - 1] as Map;
+              final qList = lMap['questions'] as List? ?? [];
+              if (qList.isNotEmpty) {
+                final List<QuizQuestionModel> result = [];
+                for (int qIdx = 0; qIdx < qList.length; qIdx++) {
+                  if (qList[qIdx] is Map) {
+                    final qMap = Map<String, dynamic>.from(qList[qIdx] as Map);
+                    result.add(QuizQuestionModel.fromMap('q_$qIdx', qMap));
+                  }
+                }
+                result.shuffle();
+                return result.length > _kQuizLimit ? result.sublist(0, _kQuizLimit) : result;
+              }
+            }
+          }
+        } else {
+          for (int uIdx = 0; uIdx < unitsRaw.length; uIdx++) {
+            if (unitsRaw[uIdx] is Map) {
+              final uMap = unitsRaw[uIdx] as Map;
+              final lList = uMap['lessons'] as List? ?? [];
+              if (widget.lessonNumber - 1 < lList.length &&
+                  lList[widget.lessonNumber - 1] is Map) {
+                final lMap = lList[widget.lessonNumber - 1] as Map;
+                final qList = lMap['questions'] as List? ?? [];
+                if (qList.isNotEmpty) {
+                  final List<QuizQuestionModel> result = [];
+                  for (int qIdx = 0; qIdx < qList.length; qIdx++) {
+                    if (qList[qIdx] is Map) {
+                      final qMap = Map<String, dynamic>.from(qList[qIdx] as Map);
+                      result.add(QuizQuestionModel.fromMap('q_$qIdx', qMap));
+                    }
+                  }
+                  result.shuffle();
+                  return result.length > _kQuizLimit ? result.sublist(0, _kQuizLimit) : result;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
   /// جلب ملخص الدرس من خريطة الدرس داخل units في مستند المادة
   Future<Map<String, dynamic>?> _fetchSummaryFromFirestore() async {
     try {
@@ -292,12 +351,11 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       if (subjDoc.exists && subjDoc.data() != null) {
         final unitsRaw = subjDoc.data()!['units'] as List? ?? [];
-        for (int uIdx = 0; uIdx < unitsRaw.length; uIdx++) {
-          if (unitsRaw[uIdx] is Map) {
-            final uMap = unitsRaw[uIdx] as Map;
+        if (widget.unitIndex != null && widget.unitIndex! >= 0 && widget.unitIndex! < unitsRaw.length) {
+          if (unitsRaw[widget.unitIndex!] is Map) {
+            final uMap = unitsRaw[widget.unitIndex!] as Map;
             final lList = uMap['lessons'] as List? ?? [];
-            if (widget.lessonNumber - 1 < lList.length &&
-                lList[widget.lessonNumber - 1] is Map) {
+            if (widget.lessonNumber - 1 < lList.length && lList[widget.lessonNumber - 1] is Map) {
               final lMap = lList[widget.lessonNumber - 1] as Map;
               final summaryText = lMap['summaryContent'] as String? ?? '';
               if (summaryText.isNotEmpty) {
@@ -307,6 +365,26 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                   'title': lMap['title'] ?? 'ملخص الدرس ${widget.lessonNumber}',
                   'content': summaryText,
                 };
+              }
+            }
+          }
+        } else {
+          for (int uIdx = 0; uIdx < unitsRaw.length; uIdx++) {
+            if (unitsRaw[uIdx] is Map) {
+              final uMap = unitsRaw[uIdx] as Map;
+              final lList = uMap['lessons'] as List? ?? [];
+              if (widget.lessonNumber - 1 < lList.length &&
+                  lList[widget.lessonNumber - 1] is Map) {
+                final lMap = lList[widget.lessonNumber - 1] as Map;
+                final summaryText = lMap['summaryContent'] as String? ?? '';
+                if (summaryText.isNotEmpty) {
+                  return {
+                    'summaryTitle': lMap['title'] ?? 'ملخص الدرس ${widget.lessonNumber}',
+                    'summaryContent': summaryText,
+                    'title': lMap['title'] ?? 'ملخص الدرس ${widget.lessonNumber}',
+                    'content': summaryText,
+                  };
+                }
               }
             }
           }
@@ -509,48 +587,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
-  /// Fallback: جلب أسئلة الدرس من خريطة الدرس في مسار المادة المختصر أو الكامل
-  Future<List<QuizQuestionModel>> _fetchQuestionsLegacy() async {
-    try {
-      final db = FirebaseFirestore.instance;
-      var subjDoc = await db
-          .collection('subjects')
-          .doc(widget.subjectDocId)
-          .get();
-      if (!subjDoc.exists || subjDoc.data() == null) {
-        subjDoc = await db
-            .collection('subjects')
-            .doc(widget.subject.subjectId)
-            .get();
-      }
 
-      if (subjDoc.exists && subjDoc.data() != null) {
-        final unitsRaw = subjDoc.data()!['units'] as List? ?? [];
-        for (int uIdx = 0; uIdx < unitsRaw.length; uIdx++) {
-          if (unitsRaw[uIdx] is Map) {
-            final uMap = unitsRaw[uIdx] as Map;
-            final lList = uMap['lessons'] as List? ?? [];
-            if (widget.lessonNumber - 1 < lList.length &&
-                lList[widget.lessonNumber - 1] is Map) {
-              final lMap = lList[widget.lessonNumber - 1] as Map;
-              final qList = lMap['questions'] as List? ?? [];
-              List<QuizQuestionModel> res = [];
-              for (int qIdx = 0; qIdx < qList.length; qIdx++) {
-                if (qList[qIdx] is Map) {
-                  final qMap = Map<String, dynamic>.from(qList[qIdx] as Map);
-                  res.add(QuizQuestionModel.fromMap('q_$qIdx', qMap));
-                }
-              }
-              if (res.isNotEmpty) return res;
-            }
-          }
-        }
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
 
   // ─── واجهة الصفحة ────────────────────────────────────────────
   // ─── واجهة الصفحة ────────────────────────────────────────────
