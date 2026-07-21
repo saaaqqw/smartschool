@@ -58,6 +58,16 @@ class _ChatMessage {
 
   final String text;
   final bool isUser;
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'isUser': isUser,
+      };
+
+  factory _ChatMessage.fromJson(Map<String, dynamic> json) => _ChatMessage(
+        text: json['text'] as String,
+        isUser: json['isUser'] as bool,
+      );
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -77,6 +87,60 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadChatHistory();
+  }
+
+  String get _chatStorageKey => 'chat_history_${widget.subjectTitle ?? "general"}';
+
+  Future<void> _loadChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final chatData = prefs.getString(_chatStorageKey);
+      if (chatData != null && chatData.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(chatData);
+        final loadedMessages = decoded.map((e) => _ChatMessage.fromJson(e as Map<String, dynamic>)).toList();
+        if (loadedMessages.isNotEmpty) {
+          setState(() {
+            _messages.clear();
+            _messages.addAll(loadedMessages);
+          });
+          // Scroll to bottom after loading
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToBottom();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading chat history: $e');
+    }
+  }
+
+  Future<void> _saveChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = jsonEncode(_messages.map((m) => m.toJson()).toList());
+      await prefs.setString(_chatStorageKey, encoded);
+    } catch (e) {
+      debugPrint('Error saving chat history: $e');
+    }
+  }
+
+  Future<void> _clearChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_chatStorageKey);
+      setState(() {
+        _messages.clear();
+        _messages.add(
+          const _ChatMessage(
+            text: 'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.',
+            isUser: false,
+          ),
+        );
+      });
+    } catch (e) {
+      debugPrint('Error clearing chat history: $e');
+    }
   }
 
   Future<String> _generateReply(String userText) async {
@@ -172,6 +236,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _controller.clear();
       _isLoading = true;
     });
+    _saveChatHistory();
 
     _scrollToBottom();
 
@@ -181,16 +246,18 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _messages.add(_ChatMessage(text: reply, isUser: false));
       });
+      _saveChatHistory();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _messages.add(
           _ChatMessage(
-            text: 'حدث خطأ أثناء جلب الرد: $e',
+            text: 'عذراً، حدث خطأ: $e',
             isUser: false,
           ),
         );
       });
+      _saveChatHistory();
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -232,13 +299,32 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           centerTitle: false,
           actions: [
-            Padding(
-              padding: const EdgeInsets.only(left: 8, right: 14),
-              child: Icon(
-                Icons.auto_awesome_rounded,
-                color: scheme.primary,
-              ),
-            )
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_rounded),
+              tooltip: 'مسح المحادثة',
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text('مسح المحادثة', style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
+                    content: Text('هل أنت متأكد أنك تريد مسح سجل المحادثة بالكامل؟', style: GoogleFonts.tajawal()),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text('إلغاء', style: GoogleFonts.tajawal()),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text('مسح', style: GoogleFonts.tajawal(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await _clearChatHistory();
+                }
+              },
+            ),
           ],
         ),
         body: Column(

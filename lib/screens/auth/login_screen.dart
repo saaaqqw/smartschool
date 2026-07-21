@@ -7,13 +7,15 @@ import '../../services/firebase_sync_service.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../../core/stores/study_timer_store.dart';
 import '../shell/main_navigation_screen.dart';
+import 'profile_editor_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.showVerificationMessage = false});
+  final bool showVerificationMessage;
 
-  static Route<void> route() {
-    return MaterialPageRoute<void>(builder: (_) => const LoginScreen());
+  static Route<void> route({bool showVerificationMessage = false}) {
+    return MaterialPageRoute<void>(builder: (_) => LoginScreen(showVerificationMessage: showVerificationMessage));
   }
 
   @override
@@ -28,6 +30,22 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _isPasswordlessMode = false; // الوضع الافتراضي: تسجيل الدخول بكلمة المرور
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showVerificationMessage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم إنشاء الحساب! يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل قبل تسجيل الدخول.', style: GoogleFonts.tajawal()),
+            backgroundColor: Colors.blue.shade700,
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -135,37 +153,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final creds = await _firebaseService.signInWithEmailAndPassword(email, password);
+      
+      // ── التحقق من تفعيل البريد الإلكتروني ───────────────────────
+      if (creds.user != null && !creds.user!.emailVerified) {
+        await _firebaseService.signOut();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حسابك غير مفعل! يرجى مراجعة صندوق الوارد والضغط على رابط التفعيل.', style: GoogleFonts.tajawal()),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
       final uid = creds.user?.uid ?? '';
       
       // Load user profile from Firestore
       final model = await _firebaseService.getUserProfile(uid);
+      bool isProfileIncomplete = false;
+
       if (model != null) {
         final profile = UserProfile.fromUserModel(model).copyWith(
           email: model.email.isNotEmpty ? model.email : email,
           pin: model.pin.isNotEmpty ? model.pin : password,
         );
         await saveUserProfile(profile);
+        isProfileIncomplete = profile.fullName.trim().isEmpty;
       } else if (uid.isNotEmpty) {
         await saveUserProfile(UserProfile(
           uid: uid,
           fullName: '',
           school: '',
-          grade: RegisterScreen.gradeOptions.first,
+          grade: ProfileEditorScreen.gradeOptions.first,
           age: 0,
-          gender: RegisterScreen.genderOptions.first,
+          gender: ProfileEditorScreen.genderOptions.first,
           email: email,
           pin: password,
         ));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'يرجى إكمال ملفك الشخصي من الإعدادات',
-                style: GoogleFonts.tajawal(),
-              ),
-            ),
-          );
-        }
+        isProfileIncomplete = true;
       }
 
       if (!mounted) return;
@@ -186,10 +214,18 @@ class _LoginScreenState extends State<LoginScreen> {
       } catch (_) {}
 
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil<void>(
-        MaterialPageRoute<void>(builder: (context) => const MainNavigationScreen()),
-        (route) => false,
-      );
+      
+      if (isProfileIncomplete) {
+        Navigator.of(context).pushAndRemoveUntil<void>(
+          ProfileEditorScreen.route(isOnboarding: true),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil<void>(
+          MaterialPageRoute<void>(builder: (context) => const MainNavigationScreen()),
+          (route) => false,
+        );
+      }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       String message = 'تعذر تسجيل الدخول، يرجى المحاولة مرة أخرى.';
@@ -230,18 +266,22 @@ class _LoginScreenState extends State<LoginScreen> {
       final uid = creds.user?.uid ?? '';
       
       final model = await _firebaseService.getUserProfile(uid);
+      bool isProfileIncomplete = false;
+
       if (model != null) {
         await saveUserProfile(UserProfile.fromUserModel(model));
+        isProfileIncomplete = model.fullName.trim().isEmpty;
       } else if (uid.isNotEmpty) {
         await saveUserProfile(UserProfile(
           uid: uid,
           fullName: creds.user?.displayName ?? '',
           school: '',
-          grade: RegisterScreen.gradeOptions.first,
+          grade: ProfileEditorScreen.gradeOptions.first,
           age: 0,
-          gender: RegisterScreen.genderOptions.first,
+          gender: ProfileEditorScreen.genderOptions.first,
           profileImageUrl: creds.user?.photoURL ?? '',
         ));
+        isProfileIncomplete = creds.user?.displayName == null || creds.user!.displayName!.isEmpty;
       }
 
       if (!mounted) return;
@@ -261,10 +301,17 @@ class _LoginScreenState extends State<LoginScreen> {
       } catch (_) {}
 
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil<void>(
-        MaterialPageRoute<void>(builder: (context) => const MainNavigationScreen()),
-        (route) => false,
-      );
+      if (isProfileIncomplete) {
+        Navigator.of(context).pushAndRemoveUntil<void>(
+          ProfileEditorScreen.route(isOnboarding: true),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil<void>(
+          MaterialPageRoute<void>(builder: (context) => const MainNavigationScreen()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

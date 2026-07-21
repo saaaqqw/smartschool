@@ -65,6 +65,9 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   int _dashboardTab = 0; // 0: إدارة الدروس، 1: بث الإشعارات
   final _notifTitleController = TextEditingController();
   final _notifBodyController = TextEditingController();
+  final _notifSenderController = TextEditingController(text: 'إدارة المدرسة');
+  final _notifImageUrlController = TextEditingController();
+  final _notifActionLinkController = TextEditingController();
   String _notifTargetGrade = 'الكل';
   String _notifType = 'general';
   bool _isSendingNotif = false;
@@ -292,6 +295,10 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   Future<void> _sendBroadcastNotification() async {
     final title = _notifTitleController.text.trim();
     final body = _notifBodyController.text.trim();
+    final senderName = _notifSenderController.text.trim();
+    final imageUrl = _notifImageUrlController.text.trim();
+    final actionLink = _notifActionLinkController.text.trim();
+
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('الرجاء إدخال عنوان الإشعار على الأقل.')),
@@ -307,12 +314,18 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
         'body': body,
         'type': _notifType,
         'targetGrade': _notifTargetGrade,
-        'senderName': 'إدارة المدرسة / المشرف المعتمد',
+        'senderName': senderName.isNotEmpty ? senderName : 'إدارة المدرسة',
+        'imageUrl': imageUrl,
+        'actionLink': actionLink,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       _notifTitleController.clear();
       _notifBodyController.clear();
+      _notifImageUrlController.clear();
+      _notifActionLinkController.clear();
+      // Keep sender controller as is for convenience
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1389,9 +1402,10 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
         textDirection: TextDirection.rtl,
         child: Column(
           children: [
-            _buildDashboardTabSwitcher(cardBgColor, borderColor, accentColor, textPrimary, textSecondary),
+            if (isSuperAdmin)
+              _buildDashboardTabSwitcher(cardBgColor, borderColor, accentColor, textPrimary, textSecondary),
             Expanded(
-              child: _dashboardTab == 1
+              child: (_dashboardTab == 1 && isSuperAdmin)
                   ? _buildBroadcastNotificationsTab(cardBgColor, borderColor, accentColor, textPrimary, textSecondary)
                   : Form(
                       key: _formKey,
@@ -2972,6 +2986,63 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 style: GoogleFonts.tajawal(color: textPrimary),
                 decoration: InputDecoration(
                   labelText: 'نص الإشعار التفصيلي والتعليمات...',
+                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _notifSenderController,
+                style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
+                decoration: InputDecoration(
+                  labelText: 'اسم المُرسل (مثال: إدارة المدرسة)',
+                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _notifImageUrlController,
+                style: GoogleFonts.tajawal(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'رابط صورة توضيحية (اختياري)',
+                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _notifActionLinkController,
+                style: GoogleFonts.tajawal(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'رابط تحويل (اختياري - يفتح عند الضغط)',
                   labelStyle: GoogleFonts.tajawal(color: textSecondary),
                   filled: true,
                   fillColor: const Color(0xFF0F172A),

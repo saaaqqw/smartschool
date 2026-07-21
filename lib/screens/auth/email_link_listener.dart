@@ -7,7 +7,7 @@ import '../../services/firebase_service.dart';
 import '../../services/firebase_sync_service.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../shell/main_navigation_screen.dart';
-import 'register_screen.dart';
+import 'profile_editor_screen.dart';
 
 /// المفتاح العالمي للتنقل واستدعاء الحوارات عند استلام رابط البريد
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -109,7 +109,7 @@ class _EmailLinkListenerState extends State<EmailLinkListener> {
       } else {
         // مستخدم جديد (أو بياناته غير مكتملة) -> توجه لصفحة إكمال بيانات الطالب مع البريد المؤكد
         appNavigatorKey.currentState?.pushAndRemoveUntil<void>(
-          RegisterScreen.route(email: email),
+          ProfileEditorScreen.route(isOnboarding: true),
           (route) => false,
         );
       }

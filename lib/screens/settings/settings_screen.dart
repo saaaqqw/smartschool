@@ -5,7 +5,7 @@ import '../../core/locale/locale_notifier.dart';
 import '../../core/theme/theme_notifier.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../../services/firebase_service.dart';
-import '../auth/register_screen.dart';
+import '../auth/profile_editor_screen.dart';
 import '../auth/welcome_screen.dart';
 import '../study/study_plan_screen.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -393,11 +393,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: () => Navigator.of(context).push(
-                    RegisterScreen.route(isEditMode: true),
+                    ProfileEditorScreen.route(),
                   ),
                   icon: const Icon(Icons.edit_rounded, size: 16),
                   label: Text(
-                    'تعديل البيانات الشخصية والرمز',
+                    'تعديل البيانات الشخصية',
                     style: GoogleFonts.tajawal(fontSize: 13.5, fontWeight: FontWeight.w700),
                   ),
                   style: OutlinedButton.styleFrom(

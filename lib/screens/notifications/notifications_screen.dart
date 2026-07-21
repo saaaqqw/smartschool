@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/stores/user_profile_store.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -232,6 +233,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     final type = (data['type'] ?? 'general').toString().toLowerCase();
                     final target = data['targetGrade'] ?? 'الكل';
                     final sender = data['senderName'] ?? 'إدارة المدرسة';
+                    final imageUrl = data['imageUrl'] ?? '';
+                    final actionLink = data['actionLink'] ?? '';
                     final timestamp = data['createdAt'];
                     final isRead = _readIds.contains(doc.id);
 
@@ -354,6 +357,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           fontSize: 13.5,
                                           color: scheme.onSurfaceVariant,
                                           height: 1.45,
+                                        ),
+                                      ),
+                                    ],
+                                    if (imageUrl.toString().trim().isNotEmpty) ...[
+                                      const SizedBox(height: 10),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Image.network(
+                                          imageUrl.toString().trim(),
+                                          height: 140,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => const SizedBox(),
+                                        ),
+                                      ),
+                                    ],
+                                    if (actionLink.toString().trim().isNotEmpty) ...[
+                                      const SizedBox(height: 10),
+                                      InkWell(
+                                        onTap: () async {
+                                          final url = Uri.parse(actionLink.toString().trim());
+                                          if (await canLaunchUrl(url)) {
+                                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: scheme.primary.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: scheme.primary.withValues(alpha: 0.3)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.link_rounded, size: 16, color: scheme.primary),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'فتح الرابط المرفق',
+                                                style: GoogleFonts.tajawal(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: scheme.primary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ],
