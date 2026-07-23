@@ -283,9 +283,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       if (subjDoc.exists && subjDoc.data() != null) {
         final unitsRaw = subjDoc.data()!['units'] as List? ?? [];
-        if (widget.unitIndex != null && widget.unitIndex! >= 0 && widget.unitIndex! < unitsRaw.length) {
-          if (unitsRaw[widget.unitIndex!] is Map) {
-            final uMap = unitsRaw[widget.unitIndex!] as Map;
+        if (widget.unitIndex >= 0 && widget.unitIndex < unitsRaw.length) {
+          if (unitsRaw[widget.unitIndex] is Map) {
+            final uMap = unitsRaw[widget.unitIndex] as Map;
             final lList = uMap['lessons'] as List? ?? [];
             if (widget.lessonNumber - 1 < lList.length && lList[widget.lessonNumber - 1] is Map) {
               final lMap = lList[widget.lessonNumber - 1] as Map;
@@ -351,9 +351,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       if (subjDoc.exists && subjDoc.data() != null) {
         final unitsRaw = subjDoc.data()!['units'] as List? ?? [];
-        if (widget.unitIndex != null && widget.unitIndex! >= 0 && widget.unitIndex! < unitsRaw.length) {
-          if (unitsRaw[widget.unitIndex!] is Map) {
-            final uMap = unitsRaw[widget.unitIndex!] as Map;
+        if (widget.unitIndex >= 0 && widget.unitIndex < unitsRaw.length) {
+          if (unitsRaw[widget.unitIndex] is Map) {
+            final uMap = unitsRaw[widget.unitIndex] as Map;
             final lList = uMap['lessons'] as List? ?? [];
             if (widget.lessonNumber - 1 < lList.length && lList[widget.lessonNumber - 1] is Map) {
               final lMap = lList[widget.lessonNumber - 1] as Map;

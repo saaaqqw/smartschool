@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import '../main.dart';
 
 /// ──────────────────────────────────────────────────────────────
 /// خدمة Firebase Cloud Messaging (FCM) لاستقبال الإشعارات
@@ -35,7 +36,32 @@ class FcmService {
     // الاستماع للإشعارات عند فتح التطبيق (Foreground)
     FirebaseMessaging.onMessage.listen((message) {
       debugPrint('[FCM] إشعار في المقدمة: ${message.notification?.title}');
-      // يمكن عرض SnackBar أو Dialog هنا عند الحاجة
+      if (message.notification != null) {
+        appScaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message.notification!.title ?? 'إشعار جديد',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                if (message.notification!.body != null)
+                  Text(message.notification!.body!),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.blue.shade800,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'حسناً',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
     });
 
     // الاستماع لفتح التطبيق عبر الضغط على إشعار من الخلفية

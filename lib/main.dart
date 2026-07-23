@@ -19,6 +19,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'widgets/global_study_timer_overlay.dart';
 import 'services/fcm_service.dart';
 
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -110,6 +113,7 @@ class SmartSchoolApp extends StatelessWidget {
           builder: (context, mode, _) {
             return MaterialApp(
               navigatorKey: appNavigatorKey,
+              scaffoldMessengerKey: appScaffoldMessengerKey,
               debugShowCheckedModeBanner: false,
               title: 'المدرسة الذكية',
               locale: locale,

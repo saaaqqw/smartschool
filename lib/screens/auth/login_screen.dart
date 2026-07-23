@@ -144,6 +144,39 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// إرسال بريد إعادة تعيين كلمة المرور
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('أدخل بريدك الإلكتروني أولاً', style: GoogleFonts.tajawal()),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم إرسال رابط إعادة تعيين كلمة المرور إلى $email', style: GoogleFonts.tajawal()),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تعذّر الإرسال. تحقق من البريد الإلكتروني.', style: GoogleFonts.tajawal()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
   Future<void> _loginWithPassword() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -520,6 +553,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                   if (v.trim().length < 6) return 'كلمة المرور يجب أن لا تقل عن 6 خانات';
                                   return null;
                                 },
+                              ),
+                              Align(
+                                alignment: AlignmentDirectional.centerEnd,
+                                child: TextButton(
+                                  onPressed: _forgotPassword,
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    foregroundColor: scheme.primary,
+                                  ),
+                                  child: Text(
+                                    'نسيت كلمة المرور؟',
+                                    style: GoogleFonts.tajawal(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                ),
                               ),
                             ],
                           ],

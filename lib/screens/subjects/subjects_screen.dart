@@ -38,9 +38,23 @@ class SubjectsScreen extends StatelessWidget {
     );
   }
 
+  void _showSubjectSearch(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final profile = userProfileNotifier.value;
+    final semester = profile.semester;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SubjectSearchSheet(semester: semester, scheme: scheme),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+
 
     return Scaffold(
       backgroundColor: scheme.surfaceContainerLowest,
@@ -59,7 +73,7 @@ class SubjectsScreen extends StatelessWidget {
             ),
             actions: [
               IconButton(
-                onPressed: () {},
+                onPressed: () => _showSubjectSearch(context),
                 icon: const Icon(Icons.search_rounded),
               ),
               const SizedBox(width: 8),
@@ -347,6 +361,121 @@ class _SemesterTabButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Bottom Sheet للبحث عن مادة ─────────────────────────────────
+class _SubjectSearchSheet extends StatefulWidget {
+  const _SubjectSearchSheet({required this.semester, required this.scheme});
+  final String semester;
+  final ColorScheme scheme;
+
+  @override
+  State<_SubjectSearchSheet> createState() => _SubjectSearchSheetState();
+}
+
+class _SubjectSearchSheetState extends State<_SubjectSearchSheet> {
+  final _controller = TextEditingController();
+  List<SchoolSubject> _filtered = kCoreSubjects;
+
+  void _onSearch(String q) {
+    setState(() {
+      _filtered = q.trim().isEmpty
+          ? kCoreSubjects
+          : kCoreSubjects.where((s) => s.title.contains(q.trim())).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = widget.scheme;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      minChildSize: 0.4,
+      builder: (ctx, scroll) {
+        return Container(
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: scheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  onChanged: _onSearch,
+                  textDirection: TextDirection.rtl,
+                  decoration: InputDecoration(
+                    hintText: 'ابحث عن مادة دراسية...',
+                    hintStyle: GoogleFonts.tajawal(color: scheme.onSurfaceVariant),
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _controller.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded),
+                            onPressed: () {
+                              _controller.clear();
+                              _onSearch('');
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: scheme.surfaceContainerHigh.withValues(alpha: 0.6),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          'لا توجد مادة بهذا الاسم',
+                          style: GoogleFonts.tajawal(color: scheme.onSurfaceVariant, fontSize: 15),
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: scroll,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemCount: _filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final s = _filtered[i];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: s.color.withValues(alpha: 0.15),
+                              child: Icon(s.icon, color: s.color, size: 22),
+                            ),
+                            title: Text(s.title, style: GoogleFonts.tajawal(fontWeight: FontWeight.w700)),
+                            trailing: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: scheme.onSurfaceVariant),
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.of(context).push(SubjectUnitsScreen.route(s));
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
