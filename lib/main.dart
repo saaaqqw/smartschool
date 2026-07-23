@@ -17,6 +17,7 @@ import 'core/stores/study_timer_store.dart';
 import 'services/firebase_sync_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'widgets/global_study_timer_overlay.dart';
+import 'services/fcm_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,9 @@ Future<void> main() async {
   await loadLocale();
   await loadTheme();
 
+  // ── تهيئة FCM وطلب إذن الإشعارات ────────────────────────────
+  await FcmService.initialize();
+
   // ── تهيئة Firebase عند وجود مستخدم مسجّل ────────────────────
   final uid = userProfileNotifier.value.uid;
   if (uid.isNotEmpty) {
@@ -44,6 +48,9 @@ Future<void> main() async {
 
     // تهيئة تقدم الطالب في كل المواد
     FirebaseSyncService.initializeUserProgress(uid).ignore();
+
+    // حفظ FCM Token في Firestore
+    FcmService.saveToken(uid).ignore();
 
     // استعادة حالة المؤقت من آخر جلسة
     _restoreTimerState(uid);

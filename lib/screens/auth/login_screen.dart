@@ -9,6 +9,7 @@ import '../../core/stores/study_timer_store.dart';
 import '../shell/main_navigation_screen.dart';
 import 'profile_editor_screen.dart';
 import 'register_screen.dart';
+import '../../services/fcm_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.showVerificationMessage = false});
@@ -201,6 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // ── تهيئة Firebase بعد تسجيل الدخول ───────────────────────
       FirebaseSyncService.initializeAllSubjects().ignore();
       FirebaseSyncService.initializeUserProgress(uid).ignore();
+      FcmService.saveToken(uid).ignore();
 
       // استعادة حالة المؤقت من آخر جلسة
       try {

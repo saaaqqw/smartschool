@@ -1,8 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/stores/user_profile_store.dart';
 import '../../data/subject_curriculum.dart';
+import '../../services/firebase_sync_service.dart';
 import 'subject_units_screen.dart';
 import '../chat/chat_screen.dart';
 
@@ -159,6 +161,9 @@ class _SubjectCardState extends State<_SubjectCard> {
   Widget build(BuildContext context) {
     final subject = widget.subject;
     final scheme = Theme.of(context).colorScheme;
+    final uid = userProfileNotifier.value.uid;
+    final semester = userProfileNotifier.value.semester;
+    final progressDocId = FirebaseSyncService.getProgressDocId(subject.title, semester: semester);
 
     return Material(
       color: Colors.transparent,
@@ -188,50 +193,106 @@ class _SubjectCardState extends State<_SubjectCard> {
                   ],
                 ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Hero(
-                      tag: 'subject_icon_${subject.title}',
-                      child: Material(
-                        color: subject.color.withValues(alpha: 0.25),
-                        shape: const CircleBorder(),
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Icon(
-                            subject.icon,
-                            size: 40,
-                            color: subject.color,
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: uid.isEmpty
+                    ? const Stream.empty()
+                    : FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(uid)
+                        .collection('progress')
+                        .doc(progressDocId)
+                        .snapshots(),
+                builder: (context, snapshot) {
+                  double progress = 0.0;
+                  int completedLessons = 0;
+
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>?;
+                    if (data != null) {
+                      completedLessons = (data['totalLessonsCompleted'] as num?)?.toInt() ?? 0;
+                      final unitProgressMap = data['unitProgress'] as Map<String, dynamic>? ?? {};
+                      if (unitProgressMap.isNotEmpty) {
+                        double total = 0;
+                        for (final v in unitProgressMap.values) {
+                          total += (v as num).toDouble();
+                        }
+                        progress = (total / 6).clamp(0.0, 1.0);
+                      }
+                    }
+                  }
+
+                  final pct = (progress * 100).toInt();
+
+                  return Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Hero(
+                          tag: 'subject_icon_${subject.title}',
+                          child: Material(
+                            color: subject.color.withValues(alpha: 0.25),
+                            shape: const CircleBorder(),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Icon(
+                                subject.icon,
+                                size: 36,
+                                color: subject.color,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        Text(
+                          subject.title,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.tajawal(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: scheme.onSurface,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // ── شريط التقدم الحقيقي ──────────────────────
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 6,
+                            backgroundColor: subject.color.withValues(alpha: 0.15),
+                            valueColor: AlwaysStoppedAnimation<Color>(subject.color),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '$completedLessons درس مكتمل',
+                              style: GoogleFonts.tajawal(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            Text(
+                              '$pct%',
+                              style: GoogleFonts.tajawal(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: pct > 0 ? subject.color : scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 14),
-                    Text(
-                      subject.title,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.tajawal(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: scheme.onSurface,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '٦ وحدات',
-                      style: GoogleFonts.tajawal(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),
