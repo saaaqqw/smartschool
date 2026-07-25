@@ -13,6 +13,7 @@ import 'screens/shell/main_navigation_screen.dart';
 import 'core/theme/theme_notifier.dart';
 import 'core/stores/user_profile_store.dart';
 import 'widgets/global_study_timer_overlay.dart';
+import 'widgets/offline_banner.dart';
 import 'services/app_startup_service.dart';
 import 'services/fcm_service.dart';
 
@@ -36,6 +37,9 @@ Future<void> main() async {
 
   // ── تهيئة FCM وطلب إذن الإشعارات ────────────────────────────
   await FcmService.initialize();
+
+  // ── تهيئة خدمة مراقبة الاتصال بالإنترنت ─────────────────────
+  await AppStartupService.initializeConnectivity();
 
   // ── تهيئة كل خدمات التطبيق للمستخدم المسجّل ────────────────
   final uid = userProfileNotifier.value.uid;
@@ -96,9 +100,11 @@ class SmartSchoolApp extends StatelessWidget {
               themeMode: mode,
               theme: _themedBase(Brightness.light, locale),
               darkTheme: _themedBase(Brightness.dark, locale),
-              builder: (context, child) => GlobalStudyTimerOverlay(
-                child: EmailLinkListener(
-                  child: child ?? const SizedBox.shrink(),
+              builder: (context, child) => OfflineBanner(
+                child: GlobalStudyTimerOverlay(
+                  child: EmailLinkListener(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
               home: (FirebaseAuth.instance.currentUser != null)

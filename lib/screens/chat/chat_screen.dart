@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/ai_config_service.dart';
+import '../../services/connectivity_service.dart';
 
 /// Chat bot screen using Groq Llama3 model.
 ///
@@ -215,7 +216,12 @@ class _ChatScreenState extends State<ChatScreen> {
         return 'عذراً، فشل الحصول على رد حالياً. رمز الخطأ: ${response.statusCode}';
       }
     } catch (e) {
-      return 'حدث خطأ أثناء الاتصال بالخادم: $e';
+      // تمييز خطأ الشبكة عن باقي الأخطاء
+      final offline = !(await ConnectivityService.isConnected());
+      if (offline) {
+        return '📡 لا يوجد اتصال بالإنترنت. يرجى المحاولة عند الاتصال.';
+      }
+      return 'حدث خطأ أثناء الاتصال بالخادم. حاول مجدداً.';
     }
   }
 
@@ -230,6 +236,20 @@ class _ChatScreenState extends State<ChatScreen> {
     final raw = _controller.text;
     final userText = raw.trim();
     if (userText.isEmpty || _isLoading) return;
+
+    // ── فحص الاتصال أولاً ────────────────────────────────────────
+    final isOnline = await ConnectivityService.isConnected();
+    if (!isOnline) {
+      setState(() {
+        _messages.add(
+          const _ChatMessage(
+            text: '📡 أنت غير متصل بالإنترنت\n\nالذكاء الاصطناعي يحتاج اتصالاً للإجابة. يرجى الاتصال والمحاولة مجدداً.',
+            isUser: false,
+          ),
+        );
+      });
+      return;
+    }
 
     setState(() {
       _messages.add(_ChatMessage(text: userText, isUser: true));

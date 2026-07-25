@@ -6,6 +6,7 @@ import '../../core/stores/user_profile_store.dart';
 import '../../core/stores/study_timer_store.dart';
 import '../../services/weekly_schedule_service.dart';
 import '../../services/firebase_sync_service.dart';
+import '../../services/connectivity_service.dart';
 import '../grades/grades_screen.dart';
 import '../settings/settings_screen.dart';
 import '../study/study_plan_screen.dart';
@@ -148,6 +149,42 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                 return CustomScrollView(
                   slivers: [
+                    // ── مؤشر حالة الاتصال ─────────────────────────────────
+                    SliverToBoxAdapter(
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: ConnectivityService.isOnlineNotifier,
+                        builder: (ctx, isOnline, _) {
+                          if (isOnline) return const SizedBox.shrink();
+                          return Container(
+                            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: Colors.orange.shade300, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.cloud_off_rounded,
+                                    size: 16, color: Colors.orange.shade700),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'تعمل بالبيانات المحفوظة — بدون اتصال',
+                                  style: GoogleFonts.tajawal(
+                                    fontSize: 12,
+                                    color: Colors.orange.shade700,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                       sliver: SliverToBoxAdapter(

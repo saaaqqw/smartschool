@@ -6,6 +6,7 @@ import '../core/stores/user_profile_store.dart';
 import '../core/stores/study_timer_store.dart';
 import 'firebase_sync_service.dart';
 import 'fcm_service.dart';
+import 'connectivity_service.dart';
 
 /// ──────────────────────────────────────────────────────────────
 /// خدمة تهيئة التطبيق عند الإطلاق (App Startup Service)
@@ -24,6 +25,12 @@ class AppStartupService {
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
     } catch (_) {}
+  }
+
+  /// تهيئة خدمة مراقبة الاتصال
+  static Future<void> initializeConnectivity() async {
+    await ConnectivityService.initialize();
+    debugPrint('[AppStartup] ✅ Connectivity Service جاهز');
   }
 
   /// تشغيل كل خدمات التهيئة للمستخدم المسجّل
