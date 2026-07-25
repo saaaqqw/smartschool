@@ -1,35 +1,11 @@
 import 'package:flutter/material.dart';
+import 'models/curriculum_models.dart';
 
-/// وحدة دراسية ضمن مادة (مع شريط تقدم تجريبي 0–1).
-class CurriculumUnit {
-  const CurriculumUnit({
-    required this.title,
-    required this.icon,
-    required this.progress,
-  });
+export 'models/curriculum_models.dart';
 
-  final String title;
-  final IconData icon;
-  /// نسبة الإنجاز المعروضة (يمكن ربطها لاحقاً بالتخزين/Firebase).
-  final double progress;
-}
-
-/// مادة أساسية مع قائمة وحدات ثابتة (6 وحدات).
-class SchoolSubject {
-  const SchoolSubject({
-    required this.subjectId,
-    required this.title,
-    required this.color,
-    required this.icon,
-    required this.units,
-  });
-
-  final String subjectId;
-  final String title;
-  final Color color;
-  final IconData icon;
-  final List<CurriculumUnit> units;
-}
+/// ──────────────────────────────────────────────────────────────
+/// بيانات المنهج الثابتة — قائمة المواد الأساسية وعناوين الوحدات
+/// ──────────────────────────────────────────────────────────────
 
 const List<String> _unitTitles = [
   'مقدمة المادة',
@@ -49,84 +25,39 @@ const List<IconData> _unitIcons = [
   Icons.quiz_rounded,
 ];
 
-double _demoProgress(int subjectIndex, int unitIndex) {
-  final n = (subjectIndex * 19 + unitIndex * 31 + 7) % 92;
-  return (n / 100).clamp(0.08, 0.98);
-}
-
-List<CurriculumUnit> _unitsForSubject(int subjectIndex) {
+/// يُنشئ 6 وحدات افتراضية لمادة ما (تقدمها 0 — يُحدَّث من Firestore).
+List<CurriculumUnit> _defaultUnits() {
   return List<CurriculumUnit>.generate(
     6,
     (i) => CurriculumUnit(
       title: _unitTitles[i],
       icon: _unitIcons[i],
-      progress: _demoProgress(subjectIndex, i),
     ),
   );
 }
 
 List<CurriculumUnit> _unitsForSocial() {
-  return [
-    CurriculumUnit(
-      title: 'الجغرافيا',
-      icon: Icons.map_rounded,
-      progress: _demoProgress(4, 0),
-    ),
-    CurriculumUnit(
-      title: 'التربية الوطنية',
-      icon: Icons.flag_rounded,
-      progress: _demoProgress(4, 1),
-    ),
-    CurriculumUnit(
-      title: 'التاريخ',
-      icon: Icons.history_edu_rounded,
-      progress: _demoProgress(4, 2),
-    ),
+  return const [
+    CurriculumUnit(title: 'الجغرافيا',       icon: Icons.map_rounded),
+    CurriculumUnit(title: 'التربية الوطنية', icon: Icons.flag_rounded),
+    CurriculumUnit(title: 'التاريخ',          icon: Icons.history_edu_rounded),
   ];
 }
 
 List<CurriculumUnit> _unitsForQuran() {
-  return [
-    CurriculumUnit(
-      title: 'تلاوة وحفظ القرآن',
-      icon: Icons.menu_book_rounded,
-      progress: _demoProgress(6, 0),
-    ),
-    CurriculumUnit(
-      title: 'التفسير',
-      icon: Icons.lightbulb_outline_rounded,
-      progress: _demoProgress(6, 1),
-    ),
-    CurriculumUnit(
-      title: 'التجويد',
-      icon: Icons.record_voice_over_rounded,
-      progress: _demoProgress(6, 2),
-    ),
+  return const [
+    CurriculumUnit(title: 'تلاوة وحفظ القرآن', icon: Icons.menu_book_rounded),
+    CurriculumUnit(title: 'التفسير',            icon: Icons.lightbulb_outline_rounded),
+    CurriculumUnit(title: 'التجويد',            icon: Icons.record_voice_over_rounded),
   ];
 }
 
 List<CurriculumUnit> _unitsForIslamic() {
-  return [
-    CurriculumUnit(
-      title: 'الإيمان والعقيدة',
-      icon: Icons.stars_rounded,
-      progress: _demoProgress(5, 0),
-    ),
-    CurriculumUnit(
-      title: 'الحديث الشريف',
-      icon: Icons.format_quote_rounded,
-      progress: _demoProgress(5, 1),
-    ),
-    CurriculumUnit(
-      title: 'الفقه والعبادات',
-      icon: Icons.balance_rounded,
-      progress: _demoProgress(5, 2),
-    ),
-    CurriculumUnit(
-      title: 'السيرة النبوية',
-      icon: Icons.mosque_rounded,
-      progress: _demoProgress(5, 3),
-    ),
+  return const [
+    CurriculumUnit(title: 'الإيمان والعقيدة', icon: Icons.stars_rounded),
+    CurriculumUnit(title: 'الحديث الشريف',    icon: Icons.format_quote_rounded),
+    CurriculumUnit(title: 'الفقه والعبادات',   icon: Icons.balance_rounded),
+    CurriculumUnit(title: 'السيرة النبوية',   icon: Icons.mosque_rounded),
   ];
 }
 
@@ -137,28 +68,28 @@ final List<SchoolSubject> kCoreSubjects = [
     title: 'الرياضيات',
     color: const Color(0xFF3949AB),
     icon: Icons.calculate_rounded,
-    units: _unitsForSubject(0),
+    units: _defaultUnits(),
   ),
   SchoolSubject(
     subjectId: 'science',
     title: 'العلوم',
     color: const Color(0xFF00897B),
     icon: Icons.science_rounded,
-    units: _unitsForSubject(1),
+    units: _defaultUnits(),
   ),
   SchoolSubject(
     subjectId: 'arabic',
     title: 'اللغة العربية',
     color: const Color(0xFFC62828),
     icon: Icons.translate_rounded,
-    units: _unitsForSubject(2),
+    units: _defaultUnits(),
   ),
   SchoolSubject(
     subjectId: 'english',
     title: 'الإنجليزية',
     color: const Color(0xFF1565C0),
     icon: Icons.abc_rounded,
-    units: _unitsForSubject(3),
+    units: _defaultUnits(),
   ),
   SchoolSubject(
     subjectId: 'social',

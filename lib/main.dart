@@ -1,10 +1,9 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'core/locale/locale_notifier.dart';
 import 'core/l10n/app_localizations.dart';
@@ -13,10 +12,8 @@ import 'screens/auth/email_link_listener.dart';
 import 'screens/shell/main_navigation_screen.dart';
 import 'core/theme/theme_notifier.dart';
 import 'core/stores/user_profile_store.dart';
-import 'core/stores/study_timer_store.dart';
-import 'services/firebase_sync_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'widgets/global_study_timer_overlay.dart';
+import 'services/app_startup_service.dart';
 import 'services/fcm_service.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -29,13 +26,10 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  try {
-    FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-    );
-  } catch (_) {}
+  // ── إعداد Firestore Cache المحلي ─────────────────────────────
+  AppStartupService.configureFirestore();
 
+  // ── تحميل إعدادات المستخدم المحلية ──────────────────────────
   await loadUserProfile();
   await loadLocale();
   await loadTheme();
@@ -43,39 +37,11 @@ Future<void> main() async {
   // ── تهيئة FCM وطلب إذن الإشعارات ────────────────────────────
   await FcmService.initialize();
 
-  // ── تهيئة Firebase عند وجود مستخدم مسجّل ────────────────────
+  // ── تهيئة كل خدمات التطبيق للمستخدم المسجّل ────────────────
   final uid = userProfileNotifier.value.uid;
-  if (uid.isNotEmpty) {
-    // تهيئة المواد في Firestore (تنشئ المستندات إن لم تكن موجودة)
-    FirebaseSyncService.initializeAllSubjects().ignore();
-
-    // تهيئة تقدم الطالب في كل المواد
-    FirebaseSyncService.initializeUserProgress(uid).ignore();
-
-    // حفظ FCM Token في Firestore
-    FcmService.saveToken(uid).ignore();
-
-    // استعادة حالة المؤقت من آخر جلسة
-    _restoreTimerState(uid);
-  }
+  await AppStartupService.initializeForUser(uid);
 
   runApp(const SmartSchoolApp());
-}
-
-/// استعادة حالة المؤقت من Firestore عند فتح التطبيق
-Future<void> _restoreTimerState(String uid) async {
-  try {
-    final saved = await FirebaseSyncService.loadTimerState(uid);
-    if (saved.isNotEmpty) {
-      final seconds = (saved['elapsedSeconds'] as num?)?.toInt() ?? 0;
-      final rawTarget = (saved['targetMinutes'] as num?)?.toInt() ?? 120;
-      final target = math.max(120, rawTarget);
-      studyTimerStore.setTarget(target);
-      if (seconds > 0) {
-        studyTimerStore.restoreElapsed(Duration(seconds: seconds));
-      }
-    }
-  } catch (_) {}
 }
 
 
