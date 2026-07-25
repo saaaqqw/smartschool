@@ -23,29 +23,41 @@ final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey = GlobalKey<Scaf
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ① Firebase ضروري قبل كل شيء
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // ── إعداد Firestore Cache المحلي ─────────────────────────────
+  // ② إعداد Firestore Cache (synchronous — لا يأخذ وقتاً)
   AppStartupService.configureFirestore();
 
-  // ── تحميل إعدادات المستخدم المحلية ──────────────────────────
-  await loadUserProfile();
-  await loadLocale();
-  await loadTheme();
+  // ③ تحميل الإعدادات المحلية فقط (SharedPreferences سريعة)
+  await Future.wait([
+    loadUserProfile(),
+    loadLocale(),
+    loadTheme(),
+  ]);
 
-  // ── تهيئة FCM وطلب إذن الإشعارات ────────────────────────────
-  await FcmService.initialize();
-
-  // ── تهيئة خدمة مراقبة الاتصال بالإنترنت ─────────────────────
-  await AppStartupService.initializeConnectivity();
-
-  // ── تهيئة كل خدمات التطبيق للمستخدم المسجّل ────────────────
-  final uid = userProfileNotifier.value.uid;
-  await AppStartupService.initializeForUser(uid);
-
+  // ④ تشغيل التطبيق فوراً — المستخدم يرى الواجهة مباشرة
   runApp(const SmartSchoolApp());
+
+  // ⑤ باقي التهيئة في الخلفية بعد عرض أول frame
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _initializeInBackground();
+  });
+}
+
+/// كل العمليات الثقيلة تُنفَّذ بعد ظهور الواجهة
+Future<void> _initializeInBackground() async {
+  // طلب إذن الإشعارات — لا يحجب الواجهة
+  FcmService.initialize().ignore();
+
+  // مراقبة الاتصال
+  AppStartupService.initializeConnectivity().ignore();
+
+  // تهيئة بيانات المستخدم
+  final uid = userProfileNotifier.value.uid;
+  AppStartupService.initializeForUser(uid).ignore();
 }
 
 
