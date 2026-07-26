@@ -92,6 +92,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
   // ── حقول التحكم بمفتاح ونموذج الذكاء الاصطناعي ────────────────────────
   final _apiKeyController = TextEditingController();
+  final _geminiApiKeyController = TextEditingController();
   final _aiModelController = TextEditingController();
   bool _isSavingAiConfig = false;
 
@@ -189,10 +190,12 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
   Future<void> _loadAiSettings() async {
     final key = await AiConfigService.getApiKey();
+    final geminiKey = await AiConfigService.getGeminiApiKey();
     final model = await AiConfigService.getModelName();
     if (mounted) {
       setState(() {
         _apiKeyController.text = key;
+        _geminiApiKeyController.text = geminiKey;
         _aiModelController.text = model;
       });
     }
@@ -200,14 +203,15 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
   Future<void> _saveAiSettings() async {
     final key = _apiKeyController.text.trim();
+    final geminiKey = _geminiApiKeyController.text.trim();
     final model = _aiModelController.text.trim();
-    if (key.isEmpty || model.isEmpty) {
-      _showSnackBar('يرجى إدخال المفتاح واسم النموذج أولاً ⚠️', isError: true);
+    if (key.isEmpty || geminiKey.isEmpty || model.isEmpty) {
+      _showSnackBar('يرجى إدخال المفاتيح واسم النموذج أولاً ⚠️', isError: true);
       return;
     }
     setState(() => _isSavingAiConfig = true);
     try {
-      await AiConfigService.updateAiConfig(apiKey: key, modelName: model);
+      await AiConfigService.updateAiConfig(apiKey: key, geminiApiKey: geminiKey, modelName: model);
       _showSnackBar('تم حفظ وتحديث إعدادات الذكاء الاصطناعي بنجاح 🤖✅');
     } catch (e) {
       _showSnackBar('خطأ أثناء حفظ إعدادات AI: $e ❌', isError: true);
@@ -273,6 +277,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
   @override
   void dispose() {
     _apiKeyController.dispose();
+    _geminiApiKeyController.dispose();
     _aiModelController.dispose();
     _adminUidController.dispose();
     _adminNameController.dispose();
@@ -2252,6 +2257,16 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                         textPrimary: textPrimary,
                         textSecondary: textSecondary,
                         prefixIcon: const Icon(Icons.key_rounded, color: Color(0xFF10B981)),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildTextFormField(
+                        label: 'مفتاح Gemini API Key:',
+                        controller: _geminiApiKeyController,
+                        hint: 'AIzaSy...',
+                        borderColor: borderColor,
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                        prefixIcon: const Icon(Icons.vpn_key_rounded, color: Color(0xFF10B981)),
                       ),
                       const SizedBox(height: 14),
                       _buildTextFormField(

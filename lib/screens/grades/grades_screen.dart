@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../services/firebase_service.dart';
 import '../../core/stores/user_profile_store.dart';
+import '../../services/ai_recommendation_service.dart';
 import '../../data/subject_curriculum.dart';
 
 // ═══════════════════════════════════════════════════════════════
@@ -955,7 +956,7 @@ class _CircleProgressPainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════════════
 // بطاقة مادة تحتاج إلى تحسين
 // ═══════════════════════════════════════════════════════════════
-class _ImprovementCard extends StatelessWidget {
+class _ImprovementCard extends StatefulWidget {
   const _ImprovementCard({
     required this.entry,
     required this.scheme,
@@ -966,14 +967,33 @@ class _ImprovementCard extends StatelessWidget {
   final ColorScheme scheme;
   final int rank;
 
-  String _advice() {
-    if (entry.percent >= 70) {
-      return 'قريب من المستوى الجيد جداً — ركّز على حل التمارين وراجع الدروس الأضعف.';
+  @override
+  State<_ImprovementCard> createState() => _ImprovementCardState();
+}
+
+class _ImprovementCardState extends State<_ImprovementCard> {
+  String _aiAdvice = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAdvice();
+  }
+
+  Future<void> _fetchAdvice() async {
+    final grade = userProfileStore.grade.isNotEmpty ? userProfileStore.grade : 'الصف السابع';
+    final advice = await AiRecommendationService.getSubjectAdvice(
+      subject: widget.entry.subject,
+      score: widget.entry.percent,
+      grade: grade,
+    );
+    if (mounted) {
+      setState(() {
+        _aiAdvice = advice;
+        _isLoading = false;
+      });
     }
-    if (entry.percent >= 60) {
-      return 'تحتاج إلى مراجعة منتظمة وتخصيص وقت يومي إضافي لهذه المادة.';
-    }
-    return 'هذه المادة تحتاج إلى اهتمام عاجل — ابدأ من الأساسيات واطلب المساعدة من معلمك.';
   }
 
   @override
@@ -981,10 +1001,10 @@ class _ImprovementCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
+        color: widget.scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: entry.ratingColor.withValues(alpha: 0.35),
+          color: widget.entry.ratingColor.withValues(alpha: 0.35),
           width: 1.5,
         ),
       ),
@@ -995,16 +1015,16 @@ class _ImprovementCard extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: entry.ratingColor.withValues(alpha: 0.12),
+              color: widget.entry.ratingColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Center(
               child: Text(
-                '$rank',
+                '${widget.rank}',
                 style: GoogleFonts.tajawal(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
-                  color: entry.ratingColor,
+                  color: widget.entry.ratingColor,
                 ),
               ),
             ),
@@ -1018,18 +1038,18 @@ class _ImprovementCard extends StatelessWidget {
               alignment: Alignment.center,
               children: [
                 CircularProgressIndicator(
-                  value: entry.ratio,
+                  value: widget.entry.ratio,
                   strokeWidth: 5,
                   strokeCap: StrokeCap.round,
-                  backgroundColor: entry.color.withValues(alpha: 0.12),
-                  color: entry.color,
+                  backgroundColor: widget.entry.color.withValues(alpha: 0.12),
+                  color: widget.entry.color,
                 ),
                 Text(
-                  '${entry.percent}%',
+                  '${widget.entry.percent}%',
                   style: GoogleFonts.tajawal(
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
-                    color: entry.color,
+                    color: widget.entry.color,
                   ),
                 ),
               ],
@@ -1044,11 +1064,11 @@ class _ImprovementCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        entry.subject,
+                        widget.entry.subject,
                         style: GoogleFonts.tajawal(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: scheme.onSurface,
+                          color: widget.scheme.onSurface,
                         ),
                       ),
                     ),
@@ -1056,38 +1076,56 @@ class _ImprovementCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: entry.ratingColor.withValues(alpha: 0.12),
+                        color: widget.entry.ratingColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        entry.rating,
+                        widget.entry.rating,
                         style: GoogleFonts.tajawal(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: entry.ratingColor,
+                          color: widget.entry.ratingColor,
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _advice(),
-                  style: GoogleFonts.tajawal(
-                    fontSize: 12,
-                    color: scheme.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
+                _isLoading
+                    ? Row(
+                        children: [
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'جاري تحليل الأداء...',
+                            style: GoogleFonts.tajawal(
+                              fontSize: 11,
+                              color: widget.scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        _aiAdvice,
+                        style: GoogleFonts.tajawal(
+                          fontSize: 12,
+                          color: widget.scheme.onSurfaceVariant,
+                          height: 1.4,
+                        ),
+                      ),
                 const SizedBox(height: 6),
                 // شريط التقدم
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: LinearProgressIndicator(
-                    value: entry.ratio,
+                    value: widget.entry.ratio,
                     minHeight: 5,
-                    backgroundColor: entry.color.withValues(alpha: 0.12),
-                    color: entry.color,
+                    backgroundColor: widget.entry.color.withValues(alpha: 0.12),
+                    color: widget.entry.color,
                   ),
                 ),
               ],

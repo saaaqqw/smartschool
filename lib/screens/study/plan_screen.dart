@@ -7,6 +7,7 @@ import '../../core/stores/study_timer_store.dart';
 import '../../data/subject_curriculum.dart';
 import '../../data/models/lesson_model.dart';
 import '../../services/weekly_schedule_service.dart';
+import '../../services/ai_recommendation_service.dart';
 import '../subjects/lesson_detail_screen.dart';
 
 /// واجهة الخطة (Plan Screen)
@@ -49,6 +50,13 @@ class PlanScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _DayTasksSection(
+                    uid: uid,
+                    todayKey: todayKey,
+                    scheme: scheme,
+                    scheduleService: scheduleService,
+                  ),
+                  const SizedBox(height: 24),
+                  _AiScheduleImprovementSection(
                     uid: uid,
                     todayKey: todayKey,
                     scheme: scheme,
@@ -589,6 +597,277 @@ class _AllCancelledCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// قسم اقتراحات الذكاء الاصطناعي لتحسين الخطة
+// ─────────────────────────────────────────────────────────────
+class _AiScheduleImprovementSection extends StatefulWidget {
+  final String uid;
+  final String todayKey;
+  final ColorScheme scheme;
+  final WeeklyScheduleService scheduleService;
+
+  const _AiScheduleImprovementSection({
+    required this.uid,
+    required this.todayKey,
+    required this.scheme,
+    required this.scheduleService,
+  });
+
+  @override
+  State<_AiScheduleImprovementSection> createState() => _AiScheduleImprovementSectionState();
+}
+
+class _AiScheduleImprovementSectionState extends State<_AiScheduleImprovementSection> {
+  bool _isLoading = true;
+  String _motivation = '';
+  List<String> _recommendedSubjects = [];
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAiRecommendations();
+  }
+
+  Future<void> _fetchAiRecommendations() async {
+    try {
+      final db = FirebaseFirestore.instance;
+      final snap = await db.collection('grades').where('userId', isEqualTo: widget.uid).get();
+      Map<String, double> scores = {};
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        if (data['subjectId'] != null && data['score'] != null) {
+          scores[data['subjectId']] = (data['score'] as num).toDouble();
+        }
+      }
+
+      final scheduleDoc = await db.collection('weekly_schedule').doc(widget.uid).get();
+      List<String> todaySubjects = [];
+      if (scheduleDoc.exists && scheduleDoc.data() != null) {
+        final map = scheduleDoc.data()!['schedule'] as Map<String, dynamic>? ?? {};
+        todaySubjects = List<String>.from(map[widget.todayKey] ?? []);
+      }
+
+      final grade = userProfileNotifier.value.grade.isNotEmpty ? userProfileNotifier.value.grade : 'الصف السابع';
+
+      final result = await AiRecommendationService.getScheduleImprovements(
+        subjectScores: scores,
+        currentTodaySubjects: todaySubjects,
+        grade: grade,
+      );
+
+      if (mounted) {
+        setState(() {
+          _motivation = result['motivation'] ?? '';
+          _recommendedSubjects = List<String>.from(result['recommended_subjects'] ?? []);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching AI recommendations: $e');
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _reviewWeakestLesson(BuildContext context, String subjectName) async {
+    final schoolSubject = kCoreSubjects.firstWhere((s) => s.title == subjectName, orElse: () => kCoreSubjects.first);
+    final grade = userProfileNotifier.value.grade;
+    final cleanGrade = grade.isEmpty ? 'الصف السابع' : grade;
+    final subjectDocId = '${schoolSubject.title} - $cleanGrade';
+
+    int currentUnitIndex = 0;
+    int currentLessonNumber = 1;
+    bool foundWeakLesson = false;
+
+    try {
+      final gradeDoc = await FirebaseFirestore.instance
+          .collection('grades')
+          .doc('${widget.uid}_${schoolSubject.title}')
+          .get();
+
+      if (gradeDoc.exists && gradeDoc.data() != null) {
+        final gData = gradeDoc.data()!;
+        final lessonScores = gData['lessonScores'] as Map<String, dynamic>? ?? {};
+        String? lowestAbsLesson;
+        double lowestVal = 100.0;
+
+        lessonScores.forEach((k, v) {
+          final val = (v as num).toDouble();
+          if (val < lowestVal) {
+            lowestVal = val;
+            lowestAbsLesson = k;
+          }
+        });
+
+        if (lowestAbsLesson != null && lowestVal < 0.6) {
+          final targetAbsLesson = int.tryParse(lowestAbsLesson!) ?? -1;
+          if (targetAbsLesson > 0) {
+            final subjSnap = await FirebaseFirestore.instance.collection('subjects').doc(subjectDocId).get();
+            if (subjSnap.exists && subjSnap.data() != null) {
+              final unitsRaw = subjSnap.data()!['units'] as List? ?? [];
+              int absCounter = 0;
+              bool found = false;
+
+              for (int u = 0; u < unitsRaw.length; u++) {
+                if (unitsRaw[u] is Map) {
+                  final lList = (unitsRaw[u] as Map)['lessons'] as List? ?? [];
+                  for (int l = 0; l < lList.length; l++) {
+                    absCounter++;
+                    if (absCounter == targetAbsLesson) {
+                      currentUnitIndex = u;
+                      currentLessonNumber = l + 1;
+                      foundWeakLesson = true;
+                      found = true;
+                      break;
+                    }
+                  }
+                }
+                if (found) break;
+              }
+            }
+          }
+        }
+      }
+      
+      // إذا لم يكن هناك درس ضعيف، نجلب درس التقدم العادي
+      if (!foundWeakLesson) {
+        final progressDoc = await FirebaseFirestore.instance.collection('users').doc(widget.uid).collection('progress').doc(schoolSubject.title).get();
+        if (progressDoc.exists) {
+          final data = progressDoc.data() ?? {};
+          currentUnitIndex = (data['currentUnitIndex'] as num?)?.toInt() ?? 0;
+          currentLessonNumber = (data['currentLessonNumber'] as num?)?.toInt() ?? 1;
+        }
+      }
+
+      final unitIndex = currentUnitIndex.clamp(0, schoolSubject.units.length - 1);
+      final currentUnit = schoolSubject.units[unitIndex];
+
+      LessonModel? lesson;
+      final snap = await FirebaseFirestore.instance.collection('subjects').doc(subjectDocId).get();
+      if (snap.exists && snap.data() != null) {
+        final unitsRaw = snap.data()!['units'] as List? ?? [];
+        if (unitIndex < unitsRaw.length && unitsRaw[unitIndex] is Map) {
+          final uMap = unitsRaw[unitIndex] as Map;
+          final lList = uMap['lessons'] as List? ?? [];
+          if (currentLessonNumber - 1 < lList.length && lList[currentLessonNumber - 1] is Map) {
+            final lMap = Map<String, dynamic>.from(lList[currentLessonNumber - 1] as Map);
+            lesson = LessonModel.fromMap(
+              'lesson_$currentLessonNumber',
+              lMap,
+              unitIndex: unitIndex,
+              lessonNumber: currentLessonNumber,
+            );
+          }
+        }
+      }
+
+      if (!context.mounted) return;
+      studyTimerStore.start();
+
+      if (foundWeakLesson) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('مراجعة سريعة لأضعف درس لديك في ${schoolSubject.title} 🚀', style: GoogleFonts.tajawal()),
+            backgroundColor: widget.scheme.primary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+
+      await Navigator.of(context).push(
+        LessonDetailScreen.route(
+          subject: schoolSubject,
+          unit: currentUnit,
+          lessonNumber: lesson?.lessonNumber ?? currentLessonNumber,
+          videoId: lesson?.videoUrl ?? '',
+          subjectDocId: subjectDocId,
+          unitIndex: unitIndex,
+          lessonDocId: lesson?.id ?? 'lesson_$currentLessonNumber',
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error reviewing lesson: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_hasError || _recommendedSubjects.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: widget.scheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: widget.scheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: widget.scheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'نصيحة الذكاء الاصطناعي',
+                style: GoogleFonts.tajawal(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: widget.scheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _motivation,
+            style: GoogleFonts.tajawal(
+              fontSize: 14,
+              color: widget.scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _recommendedSubjects.map((sub) {
+              return ActionChip(
+                label: Text(sub),
+                backgroundColor: widget.scheme.surface,
+                labelStyle: GoogleFonts.tajawal(
+                  color: widget.scheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+                side: BorderSide(color: widget.scheme.primary.withValues(alpha: 0.3)),
+                avatar: Icon(Icons.history_edu_rounded, size: 16, color: widget.scheme.primary),
+                tooltip: 'انقر لمراجعة أضعف درس في هذه المادة',
+                onPressed: () => _reviewWeakestLesson(context, sub),
+              );
+            }).toList(),
           ),
         ],
       ),

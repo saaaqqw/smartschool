@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
-import '../core/stores/user_profile_store.dart';
 import '../core/stores/study_timer_store.dart';
 import 'firebase_sync_service.dart';
 import 'fcm_service.dart';
