@@ -7,6 +7,7 @@ import '../../services/firebase_service.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../../services/ai_recommendation_service.dart';
 import '../../data/subject_curriculum.dart';
+import '../../widgets/shimmer_loading.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // نموذج البيانات
@@ -224,7 +225,7 @@ class _GradesScreenState extends State<GradesScreen>
         stream: _svc.getGradesStream(uid),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const _GradesShimmerLoading();
           }
 
           final entries = _parseEntries(snap);
@@ -623,9 +624,9 @@ class _GpaSummaryHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: scheme.primary.withValues(alpha: 0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: scheme.primary.withValues(alpha: 0.15),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -982,10 +983,10 @@ class _ImprovementCardState extends State<_ImprovementCard> {
   }
 
   Future<void> _fetchAdvice() async {
-    final grade = userProfileStore.grade.isNotEmpty ? userProfileStore.grade : 'الصف السابع';
+    final grade = userProfileNotifier.value.grade.isNotEmpty ? userProfileNotifier.value.grade : 'الصف السابع';
     final advice = await AiRecommendationService.getSubjectAdvice(
       subject: widget.entry.subject,
-      score: widget.entry.percent,
+      score: widget.entry.score,
       grade: grade,
     );
     if (mounted) {
@@ -1258,24 +1259,79 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.bar_chart_rounded,
-            size: 64,
-            color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'لا توجد درجات مسجّلة حالياً',
-            style: GoogleFonts.tajawal(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurfaceVariant,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.analytics_outlined,
+                size: 80,
+                color: scheme.primary,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(
+              'لا توجد درجات حالياً',
+              style: GoogleFonts.tajawal(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'قم بإنهاء بعض الدروس والاختبارات لتظهر نتائجك وتقييمك هنا.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.tajawal(
+                fontSize: 15,
+                height: 1.5,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GradesShimmerLoading extends StatelessWidget {
+  const _GradesShimmerLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerLoading(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const ShimmerPlaceholder(height: 160, borderRadius: 28),
+            const SizedBox(height: 32),
+            const ShimmerPlaceholder(width: 150, height: 24),
+            const SizedBox(height: 24),
+            Expanded(
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.65,
+                ),
+                itemCount: 6,
+                itemBuilder: (ctx, i) => const ShimmerPlaceholder(borderRadius: 20),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

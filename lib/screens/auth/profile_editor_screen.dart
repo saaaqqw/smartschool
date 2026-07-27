@@ -7,6 +7,7 @@ import '../../services/firebase_service.dart';
 import '../../services/firebase_sync_service.dart';
 import '../../widgets/profile_image_picker_sheet.dart';
 import '../shell/main_navigation_screen.dart';
+import '../../core/config/developer_auth_service.dart';
 
 class ProfileEditorScreen extends StatefulWidget {
   const ProfileEditorScreen({
@@ -80,6 +81,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
 
   File? _imageFile;
   bool _isLoading = false;
+  bool _isAdmin = false;
 
   static const double _fieldRadius = 16;
 
@@ -94,6 +96,13 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
     );
     _selectedGrade = _coerceGrade(p.grade);
     _gender = _coerceGender(p.gender);
+    _checkAdminStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final p = userProfileNotifier.value;
+    final isAdmin = await DeveloperAuthService.isUserAuthorizedAdmin(p.uid, p.email);
+    if (mounted) setState(() => _isAdmin = isAdmin);
   }
 
   @override
@@ -339,14 +348,25 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
               children: [
                 Expanded(
                   flex: 2,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _selectedGrade,
-                    decoration: _fieldDecoration(scheme, label: 'الصف'),
-                    items: ProfileEditorScreen.gradeOptions
-                        .map((g) => DropdownMenuItem(value: g, child: Text(g, style: GoogleFonts.tajawal())))
-                        .toList(),
-                    onChanged: (v) { if (v != null) setState(() => _selectedGrade = v); },
-                  ),
+                  child: (widget.isOnboarding || _isAdmin)
+                      ? DropdownButtonFormField<String>(
+                          initialValue: _selectedGrade,
+                          decoration: _fieldDecoration(scheme, label: 'الصف'),
+                          items: ProfileEditorScreen.gradeOptions
+                              .map((g) => DropdownMenuItem(value: g, child: Text(g, style: GoogleFonts.tajawal())))
+                              .toList(),
+                          onChanged: (v) { if (v != null) setState(() => _selectedGrade = v); },
+                        )
+                      : TextFormField(
+                          initialValue: _selectedGrade,
+                          readOnly: true,
+                          decoration: _fieldDecoration(
+                            scheme,
+                            label: 'الصف (لا يمكن تغييره)',
+                            suffix: Icon(Icons.lock_outline_rounded, color: scheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                          ),
+                          style: GoogleFonts.tajawal(fontSize: 16, color: scheme.onSurfaceVariant),
+                        ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(

@@ -13,6 +13,7 @@ import '../study/study_plan_screen.dart';
 import '../subjects/subjects_screen.dart';
 import '../chat/chat_screen.dart';
 import '../../widgets/profile_image_picker_sheet.dart';
+import '../auth/profile_editor_screen.dart';
 
 import '../../data/subject_curriculum.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -191,13 +192,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                         child: _Header(
                           scheme: scheme,
                           profile: profile,
-                          onSettings: () {
-                            _openTab(
-                              context,
-                              4,
-                              () => Navigator.of(context).push(SettingsScreen.route()),
-                            );
-                          },
                         ),
                       ),
                     ),
@@ -265,12 +259,10 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.scheme,
     required this.profile,
-    required this.onSettings,
   });
 
   final ColorScheme scheme;
   final UserProfile profile;
-  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +273,7 @@ class _Header extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         GestureDetector(
-          onTap: () => ProfileImagePickerSheet.show(context),
+          onTap: () => Navigator.of(context).push(ProfileEditorScreen.route()),
           child: CircleAvatar(
             radius: 32,
             backgroundColor: scheme.primaryContainer,
@@ -321,11 +313,6 @@ class _Header extends StatelessWidget {
           ),
         ),
         const _NotificationBellButton(),
-        const SizedBox(width: 8),
-        IconButton.filledTonal(
-          onPressed: onSettings,
-          icon: const Icon(Icons.settings_rounded),
-        ),
       ],
     );
   }
@@ -458,14 +445,14 @@ class _TodayPlanCard extends StatelessWidget {
               Row(
                 children: [
                   SizedBox(
-                    height: 88,
-                    width: 88,
+                    height: MediaQuery.of(context).size.width * 0.22,
+                    width: MediaQuery.of(context).size.width * 0.22,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
                         SizedBox(
-                          height: 88,
-                          width: 88,
+                          height: MediaQuery.of(context).size.width * 0.22,
+                          width: MediaQuery.of(context).size.width * 0.22,
                           child: CircularProgressIndicator(
                             value: progress,
                             strokeWidth: 8,
@@ -546,36 +533,34 @@ class _QuickActions extends StatelessWidget {
       required Color color,
       required VoidCallback onTap,
     }) {
-      return Expanded(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: FilledButton.tonal(
-            onPressed: onTap,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              backgroundColor: color.withValues(alpha: 0.22),
-              foregroundColor: scheme.onSurface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+      return SizedBox(
+        width: MediaQuery.of(context).size.width / 2 - 28,
+        child: FilledButton.tonal(
+          onPressed: onTap,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            backgroundColor: color.withValues(alpha: 0.15),
+            foregroundColor: scheme.onSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: color, size: 26),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.tajawal(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.tajawal(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
@@ -592,8 +577,10 @@ class _QuickActions extends StatelessWidget {
             color: scheme.onSurface,
           ),
         ),
-        const SizedBox(height: 12),
-        Row(
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
           children: [
             action(
               label: AppLocalizations.of(context).translate('start_study'),
