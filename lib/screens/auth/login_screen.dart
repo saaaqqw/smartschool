@@ -30,22 +30,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _firebaseService = FirebaseService();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _isPasswordlessMode = false; // الوضع الافتراضي: تسجيل الدخول بكلمة المرور
 
   @override
   void initState() {
     super.initState();
-    if (widget.showVerificationMessage) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('تم إنشاء الحساب! يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل قبل تسجيل الدخول.', style: GoogleFonts.tajawal()),
-            backgroundColor: Colors.blue.shade700,
-            duration: const Duration(seconds: 8),
-          ),
-        );
-      });
-    }
   }
 
   @override
@@ -53,95 +41,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  Future<void> _sendEmailLink() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final email = _emailController.text.trim();
-    setState(() => _isLoading = true);
-
-    try {
-      final actionCodeSettings = ActionCodeSettings(
-        url: 'https://saqer1-448ea.firebaseapp.com/login',
-        handleCodeInApp: true,
-        androidPackageName: 'com.example.smart_school1',
-        androidInstallApp: true,
-        androidMinimumVersion: '1',
-      );
-
-      await _firebaseService.sendSignInLinkToEmail(
-        email: email,
-        actionCodeSettings: actionCodeSettings,
-      );
-
-      if (!mounted) return;
-      _showEmailSentDialog(email);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('فشل إرسال رابط التحقق: $e', style: GoogleFonts.tajawal())),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showEmailSentDialog(String email) {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              const Icon(Icons.mark_email_read_rounded, color: Colors.green, size: 30),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'تم إرسال رابط التحقق!',
-                  style: GoogleFonts.tajawal(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'أرسلنا رابط التحقق المباشر إلى بريدك الإلكتروني:',
-                style: GoogleFonts.tajawal(fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  email,
-                  style: GoogleFonts.tajawal(fontWeight: FontWeight.bold, color: Colors.blue.shade700),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'يرجى فتح بريدك الإلكتروني والضغط على الرابط ليتم تفعيل حسابك ونقلك تلقائياً دون الحاجة لأي رمز.',
-                style: GoogleFonts.tajawal(fontSize: 13, height: 1.5, color: Colors.grey.shade700),
-              ),
-            ],
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text('حسناً، فهمت', style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   /// إرسال بريد إعادة تعيين كلمة المرور
@@ -188,20 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final creds = await _firebaseService.signInWithEmailAndPassword(email, password);
       
-      // ── التحقق من تفعيل البريد الإلكتروني ───────────────────────
-      if (creds.user != null && !creds.user!.emailVerified) {
-        await _firebaseService.signOut();
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('حسابك غير مفعل! يرجى مراجعة صندوق الوارد والضغط على رابط التفعيل.', style: GoogleFonts.tajawal()),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-        setState(() => _isLoading = false);
-        return;
-      }
+
 
       final uid = creds.user?.uid ?? '';
       
@@ -466,7 +352,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          _isPasswordlessMode ? Icons.mark_email_read_outlined : Icons.lock_person_rounded,
+                          Icons.lock_person_rounded,
                           size: 64,
                           color: scheme.primary,
                         ),
@@ -474,7 +360,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       
                       Text(
-                        _isPasswordlessMode ? 'الدخول السريع عبر الرابط' : 'تسجيل الدخول',
+                        'تسجيل الدخول',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
                           fontSize: 26,
@@ -484,9 +370,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _isPasswordlessMode
-                            ? 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً سحرياً لتسجيل الدخول فوراً.'
-                            : 'أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى حسابك الدراسي.',
+                        'أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى حسابك الدراسي.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
                           fontSize: 14,
@@ -530,8 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 return null;
                               },
                             ),
-                            if (!_isPasswordlessMode) ...[
-                              const SizedBox(height: 18),
+                            const SizedBox(height: 18),
                               TextFormField(
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
@@ -568,7 +451,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                            ],
                           ],
                         ),
                       ),
@@ -579,78 +461,22 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Center(child: CircularProgressIndicator())
                       else ...[
                         FilledButton(
-                          onPressed: _isPasswordlessMode ? _sendEmailLink : _loginWithPassword,
+                          onPressed: _loginWithPassword,
                           style: FilledButton.styleFrom(
                             minimumSize: const Size.fromHeight(56),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 0,
                           ),
                           child: Text(
-                            _isPasswordlessMode ? 'إرسال رابط التحقق السريع 🚀' : 'تسجيل الدخول',
+                            'تسجيل الدخول',
                             style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
                           ),
                         ),
                         const SizedBox(height: 16),
 
-                        // زر إنشاء حساب جديد البارز
-                        if (!_isPasswordlessMode) ...[
-                          Container(
-                            decoration: BoxDecoration(
-                              color: scheme.primary.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(16),
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    RegisterScreen.route(email: _emailController.text.trim()),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.person_add_rounded, color: scheme.primary, size: 22),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'ليس لديك حساب؟ إنشاء حساب جديد الآن',
-                                        style: GoogleFonts.tajawal(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 15,
-                                          color: scheme.primary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        
-                        // زر التبديل بين وضع رابط البريد ووضع كلمة المرور
-                        TextButton(
-                          onPressed: () {
-                            setState(() => _isPasswordlessMode = !_isPasswordlessMode);
-                          },
-                          child: Text(
-                            _isPasswordlessMode
-                                ? 'الدخول بواسطة كلمة المرور'
-                                : 'الدخول السريع عبر رابط البريد (بدون كلمة مرور)',
-                            style: GoogleFonts.tajawal(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: scheme.secondary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        
+                        const SizedBox(height: 16),
+
+                        // 2. زر تسجيل الدخول بواسطة جوجل
                         OutlinedButton.icon(
                           onPressed: _loginWithGoogle,
                           icon: Image.network(
@@ -669,6 +495,29 @@ class _LoginScreenState extends State<LoginScreen> {
                             backgroundColor: isDark 
                                 ? Colors.white.withValues(alpha: 0.04)
                                 : Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 3. زر إنشاء حساب جديد
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              RegisterScreen.route(email: _emailController.text.trim()),
+                            );
+                          },
+                          icon: const Icon(Icons.person_add_rounded, size: 20),
+                          label: Text(
+                            'إنشاء حساب جديد',
+                            style: GoogleFonts.tajawal(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: scheme.primary,
+                            minimumSize: const Size.fromHeight(56),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                         ),
                       ],

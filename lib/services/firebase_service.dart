@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import 'dart:io';
 import '../data/models/user_model.dart';
 import 'firebase_sync_service.dart';
@@ -38,51 +38,6 @@ class FirebaseService {
         email: email, password: password);
   }
 
-  // --- Email Link (Passwordless Sign-In) ---
-
-  static const String _pendingEmailKey = 'pending_email_link_address';
-
-  Future<void> savePendingEmailLink(String email) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_pendingEmailKey, email);
-  }
-
-  Future<String?> getPendingEmailLink() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_pendingEmailKey);
-  }
-
-  Future<void> clearPendingEmailLink() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_pendingEmailKey);
-  }
-
-  Future<void> sendSignInLinkToEmail({
-    required String email,
-    required ActionCodeSettings actionCodeSettings,
-  }) async {
-    await _auth.sendSignInLinkToEmail(
-      email: email,
-      actionCodeSettings: actionCodeSettings,
-    );
-    await savePendingEmailLink(email);
-  }
-
-  bool isSignInWithEmailLink(String link) {
-    return _auth.isSignInWithEmailLink(link);
-  }
-
-  Future<UserCredential> signInWithEmailLink({
-    required String email,
-    required String emailLink,
-  }) async {
-    final creds = await _auth.signInWithEmailLink(
-      email: email,
-      emailLink: emailLink,
-    );
-    await clearPendingEmailLink();
-    return creds;
-  }
 
   Future<UserCredential> signInWithGoogle() async {
     final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();

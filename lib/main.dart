@@ -8,7 +8,7 @@ import 'firebase_options.dart';
 import 'core/locale/locale_notifier.dart';
 import 'core/l10n/app_localizations.dart';
 import 'screens/auth/welcome_screen.dart';
-import 'screens/auth/email_link_listener.dart';
+
 import 'screens/shell/main_navigation_screen.dart';
 import 'core/theme/theme_notifier.dart';
 import 'core/stores/user_profile_store.dart';
@@ -114,9 +114,7 @@ class SmartSchoolApp extends StatelessWidget {
               darkTheme: _themedBase(Brightness.dark, locale),
               builder: (context, child) => OfflineBanner(
                 child: GlobalStudyTimerOverlay(
-                  child: EmailLinkListener(
-                    child: child ?? const SizedBox.shrink(),
-                  ),
+                  child: child ?? const SizedBox.shrink(),
                 ),
               ),
               home: (FirebaseAuth.instance.currentUser != null)

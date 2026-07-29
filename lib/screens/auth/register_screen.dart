@@ -125,10 +125,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         createdUser = creds.user;
       }
 
-      // ── إرسال رابط التفعيل للبريد الإلكتروني ───────────────────────
-      if (createdUser != null && !createdUser.emailVerified) {
-        await createdUser.sendEmailVerification();
-      }
+
 
       // حفظ بيانات أولوية في Local Cache كـ uid و pin فقط، الباقي سيتم تعبئته في شاشة Onboarding
       final profile = UserProfile(
@@ -147,8 +144,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
 
-      // العودة لشاشة تسجيل الدخول لإخباره بتفعيل بريده
-      Navigator.of(context).pushReplacement(LoginScreen.route(showVerificationMessage: true));
+      // العودة لشاشة تسجيل الدخول
+      Navigator.of(context).pushReplacement(LoginScreen.route(showVerificationMessage: false));
 
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
