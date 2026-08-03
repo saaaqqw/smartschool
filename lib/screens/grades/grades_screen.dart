@@ -8,6 +8,7 @@ import '../../core/stores/user_profile_store.dart';
 import '../../services/ai_recommendation_service.dart';
 import '../../data/subject_curriculum.dart';
 import '../../widgets/shimmer_loading.dart';
+import '../../services/db_keys.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // نموذج البيانات
@@ -126,6 +127,10 @@ class _GradesScreenState extends State<GradesScreen>
   final _svc = FirebaseService();
   late final AnimationController _animCtrl;
 
+  List<double> _weeklyAverages = List.filled(7, 0.0);
+  List<String> _weeklyLabels = List.filled(7, '');
+  bool _isLoadingWeekly = true;
+
   @override
   void initState() {
     super.initState();
@@ -134,6 +139,72 @@ class _GradesScreenState extends State<GradesScreen>
       duration: const Duration(milliseconds: 900),
     )..forward();
     _initGradesIfNeeded();
+    _loadWeeklyData();
+  }
+
+  Future<void> _loadWeeklyData() async {
+    final uid = userProfileNotifier.value.uid;
+    if (uid.isEmpty) return;
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .get();
+
+      final now = DateTime.now();
+      final todayMidnight = DateTime(now.year, now.month, now.day);
+      
+      final Map<int, List<double>> dailyScores = {};
+      final List<String> labels = List.filled(7, '');
+      const arabicDays = ['إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت', 'أحد'];
+
+      for (int i = 0; i < 7; i++) {
+        final targetDate = todayMidnight.subtract(Duration(days: 6 - i));
+        labels[i] = arabicDays[targetDate.weekday - 1];
+      }
+
+      for (final doc in query.docs) {
+        final d = doc.data() as Map<String, dynamic>;
+        final type = d['type'] as String? ?? '';
+        if (type == 'quiz_result' || type == 'unit_exam_result') {
+          final timestamp = d['createdAt'] as Timestamp?;
+          if (timestamp != null) {
+            final date = timestamp.toDate();
+            final dateMidnight = DateTime(date.year, date.month, date.day);
+            final diffDays = todayMidnight.difference(dateMidnight).inDays;
+            
+            if (diffDays >= 0 && diffDays < 7) {
+              final index = 6 - diffDays;
+              final score = (d['score'] as num?)?.toDouble() ?? 0.0;
+              dailyScores.putIfAbsent(index, () => []).add(score);
+            }
+          }
+        }
+      }
+
+      final List<double> averages = List.filled(7, 0.0);
+      for (int i = 0; i < 7; i++) {
+        if (dailyScores.containsKey(i) && dailyScores[i]!.isNotEmpty) {
+          final sum = dailyScores[i]!.reduce((a, b) => a + b);
+          averages[i] = sum / dailyScores[i]!.length;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _weeklyAverages = averages;
+          _weeklyLabels = labels;
+          _isLoadingWeekly = false;
+        });
+      }
+    } catch (e) {
+       debugPrint('Error loading weekly data: $e');
+       if (mounted) setState(() => _isLoadingWeekly = false);
+    }
   }
 
   @override
@@ -149,19 +220,32 @@ class _GradesScreenState extends State<GradesScreen>
     final grade = userProfileNotifier.value.grade;
     final cleanGrade = grade.isEmpty ? 'الصف السابع' : grade;
 
+    final currentSemester = userProfileNotifier.value.semester;
+
     for (final s in kCoreSubjects) {
+      final gradeDocId = DbKeys.gradesDoc(
+        uid: uid,
+        subjectTitle: s.title,
+        grade: cleanGrade,
+        semester: currentSemester,
+      );
       final docRef = FirebaseFirestore.instance
           .collection('grades')
-          .doc('${uid}_${s.title}');
+          .doc(gradeDocId);
       final snap = await docRef.get();
 
       if (!snap.exists) {
         double calculatedScore = 0.0;
         Map<String, dynamic> lessonScores = {};
         try {
+          final subjectDocId = DbKeys.subjectDoc(
+            subjectTitle: s.title,
+            grade: cleanGrade,
+            semester: currentSemester,
+          );
           final subjDoc = await FirebaseFirestore.instance
               .collection('subjects')
-              .doc('${s.title} - $cleanGrade')
+              .doc(subjectDocId)
               .get();
           if (subjDoc.exists && subjDoc.data() != null) {
             final unitsRaw = subjDoc.data()!['units'] as List? ?? [];
@@ -193,10 +277,12 @@ class _GradesScreenState extends State<GradesScreen>
 
         await FirebaseFirestore.instance
             .collection('grades')
-            .doc('${uid}_${s.title}')
+            .doc(gradeDocId)
             .set({
           'userId': uid,
           'subjectId': s.title,
+          'grade': cleanGrade,
+          'semester': currentSemester,
           'score': calculatedScore.clamp(0.0, 100.0),
           'maxScore': 100.0,
           if (lessonScores.isNotEmpty) 'lessonScores': lessonScores,
@@ -218,11 +304,15 @@ class _GradesScreenState extends State<GradesScreen>
       );
     }
 
+    final grade = userProfileNotifier.value.grade;
+    final cleanGrade = grade.isEmpty ? 'الصف السابع' : grade;
+    final semester = userProfileNotifier.value.semester;
+
     return Scaffold(
       backgroundColor: scheme.surfaceContainerLowest,
       appBar: _buildAppBar(scheme, context),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _svc.getGradesStream(uid),
+        stream: _svc.getGradesStream(uid, semester: semester, grade: cleanGrade),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const _GradesShimmerLoading();
@@ -250,6 +340,20 @@ class _GradesScreenState extends State<GradesScreen>
                   entries: entries,
                   avgRatio: avg,
                   animCtrl: _animCtrl,
+                ),
+              ),
+
+              // ── أداء آخر 7 أيام ──
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 16, right: 16),
+                  child: _WeeklyGradesChart(
+                    scheme: scheme,
+                    averages: _weeklyAverages,
+                    labels: _weeklyLabels,
+                    isLoading: _isLoadingWeekly,
+                    animCtrl: _animCtrl,
+                  ),
                 ),
               ),
 
@@ -359,7 +463,7 @@ class _GradesScreenState extends State<GradesScreen>
       if (rawSubj.isEmpty) continue;
 
       // تنظيف الاسم من الصف أو المسميات الإنجليزية لتوحيد المفتاح ومنع الازدواجية
-      String cleanSubj = rawSubj.split(' - ').first.trim();
+      String cleanSubj = rawSubj.split('__').first.trim();
       const engMap = {
         'math': 'الرياضيات',
         'science': 'العلوم',
@@ -1132,6 +1236,206 @@ class _ImprovementCardState extends State<_ImprovementCard> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiAdviceCard extends StatelessWidget {
+  final ColorScheme scheme;
+  final String advice;
+
+  const _AiAdviceCard({required this.scheme, required this.advice});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.psychology_rounded, color: scheme.primary, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'تحليل الذكاء الاصطناعي',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  advice,
+                  style: GoogleFonts.tajawal(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// قسم أداء آخر 7 أيام
+// ═══════════════════════════════════════════════════════════════
+class _WeeklyGradesChart extends StatelessWidget {
+  final ColorScheme scheme;
+  final List<double> averages;
+  final List<String> labels;
+  final bool isLoading;
+  final AnimationController animCtrl;
+
+  const _WeeklyGradesChart({
+    required this.scheme,
+    required this.averages,
+    required this.labels,
+    required this.isLoading,
+    required this.animCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: scheme.secondary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.bar_chart_rounded, color: scheme.secondary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'أداء آخر 7 أيام',
+                style: GoogleFonts.tajawal(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (isLoading)
+            const SizedBox(
+              height: 150,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (averages.every((a) => a == 0))
+            SizedBox(
+              height: 150,
+              child: Center(
+                child: Text(
+                  'لا توجد اختبارات في آخر 7 أيام',
+                  style: GoogleFonts.tajawal(
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 150,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(7, (i) {
+                  final score = averages[i]; // 0.0 to 100.0
+                  final ratio = (score / 100).clamp(0.0, 1.0);
+                  
+                  return Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (score > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              '${score.round()}',
+                              style: GoogleFonts.tajawal(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: scheme.primary,
+                              ),
+                            ),
+                          ),
+                        AnimatedBuilder(
+                          animation: animCtrl,
+                          builder: (context, child) {
+                            final delay = i * 0.1;
+                            final t = ((animCtrl.value - delay) / (1 - delay)).clamp(0.0, 1.0);
+                            final height = ratio * 100 * t;
+                            
+                            return Container(
+                              height: height > 0 ? height.clamp(4.0, 100.0) : 4.0,
+                              width: 16,
+                              decoration: BoxDecoration(
+                                color: score > 0 ? scheme.primary : scheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          labels[i],
+                          style: GoogleFonts.tajawal(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.visible,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
         ],
       ),
     );

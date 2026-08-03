@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/subject_curriculum.dart';
+import 'db_keys.dart';
 
 /// ──────────────────────────────────────────────────────────────
 /// خدمة التزامن الشامل مع Firestore
@@ -14,27 +15,33 @@ class FirebaseSyncService {
   static final _db = FirebaseFirestore.instance;
 
   // ═══════════════════════════════════════════════════════════════
-  // دوال المعرفات والمساعدة للفصلين الدراسيين (الأول والثاني)
+  // دوال المعرفات — تُفوِّض لـ DbKeys لضمان التناسق الكامل
   // ═══════════════════════════════════════════════════════════════
 
+  /// معرف مستند المادة في subjects collection.
   static String getSubjectDocId(
     String subjectTitle,
     String grade, {
     String semester = 'الفصل الدراسي الأول',
-  }) {
-    final cleanGrade = grade.isEmpty ? 'الصف السابع' : grade;
-    if (semester == 'الفصل الدراسي الثاني') {
-      return '$subjectTitle - $cleanGrade - الفصل الدراسي الثاني';
-    }
-    return '$subjectTitle - $cleanGrade';
-  }
+  }) =>
+      DbKeys.subjectDoc(
+        subjectTitle: subjectTitle,
+        grade: grade,
+        semester: semester,
+      );
 
-  static String getProgressDocId(String subjectTitle, {String semester = 'الفصل الدراسي الأول'}) {
-    if (semester == 'الفصل الدراسي الثاني') {
-      return '$subjectTitle - الفصل الدراسي الثاني';
-    }
-    return subjectTitle;
-  }
+  /// معرف مستند التقدم في users/{uid}/progress.
+  /// [grade] مطلوب — احرص على تمريره دائماً.
+  static String getProgressDocId(
+    String subjectTitle, {
+    String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
+  }) =>
+      DbKeys.progressDoc(
+        subjectTitle: subjectTitle,
+        grade: grade,
+        semester: semester,
+      );
 
   // ═══════════════════════════════════════════════════════════════
   // 1. تهيئة تقدم المواد
@@ -47,10 +54,19 @@ class FirebaseSyncService {
     final batch = _db.batch();
     final progressRef = _db.collection('users').doc(uid).collection('progress');
 
+    // يجلب الصف من Firestore لضمان صحة المعرف
+    final userDoc = await _db.collection('users').doc(uid).get();
+    final grade = (userDoc.data()?['grade'] as String? ?? 'الصف السابع');
+    final cleanGrade = grade.isEmpty ? 'الصف السابع' : grade;
+
     final semesters = ['الفصل الدراسي الأول', 'الفصل الدراسي الثاني'];
     for (final semester in semesters) {
       for (final subject in kCoreSubjects) {
-        final docId = getProgressDocId(subject.title, semester: semester);
+        final docId = getProgressDocId(
+          subject.title,
+          semester: semester,
+          grade: cleanGrade,
+        );
         final docRef = progressRef.doc(docId);
         final snap = await docRef.get();
 
@@ -58,10 +74,13 @@ class FirebaseSyncService {
           batch.set(docRef, {
             'subjectId': subject.subjectId,
             'subjectTitle': subject.title,
+            'grade': cleanGrade,
             'semester': semester,
             'currentUnitIndex': 0,
             'currentLessonNumber': 1,
             'unitProgress': {},
+            'unitExamScores': {},
+            'completed_lessons_set': [],
             'totalLessonsCompleted': 0,
             'createdAt': FieldValue.serverTimestamp(),
             'lastUpdated': FieldValue.serverTimestamp(),
@@ -78,8 +97,9 @@ class FirebaseSyncService {
     String uid,
     String subjectTitle, {
     String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
   }) async {
-    final docId = getProgressDocId(subjectTitle, semester: semester);
+    final docId = getProgressDocId(subjectTitle, semester: semester, grade: grade);
     final doc = await _db
         .collection('users')
         .doc(uid)
@@ -92,6 +112,8 @@ class FirebaseSyncService {
         'currentUnitIndex': 0,
         'currentLessonNumber': 1,
         'unitProgress': {},
+        'unitExamScores': {},
+        'completed_lessons_set': [],
         'totalLessonsCompleted': 0,
       };
     }
@@ -101,12 +123,17 @@ class FirebaseSyncService {
 
   /// Stream مستمر لتقدم مادة معينة للطالب.
   static Stream<Map<String, dynamic>> subjectProgressStream(
-      String uid, String subjectTitle) {
+    String uid,
+    String subjectTitle, {
+    String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
+  }) {
+    final docId = getProgressDocId(subjectTitle, semester: semester, grade: grade);
     return _db
         .collection('users')
         .doc(uid)
         .collection('progress')
-        .doc(subjectTitle)
+        .doc(docId)
         .snapshots()
         .map((doc) => doc.data() ?? {});
   }
@@ -286,14 +313,15 @@ class FirebaseSyncService {
   // 5. تحديث عدد الدروس المكتملة
   // ═══════════════════════════════════════════════════════════════
 
-  /// يزيد عداد الدروس المكتملة للمادة بمقدار 1 حسب الفصل الدراسي.
+  /// يزيد عداد الدروس المكتملة للمادة بمقدار 1 حسب الفصل الدراسي والصف.
   static Future<void> incrementLessonsCompleted(
     String uid,
     String subjectTitle, {
     String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
   }) async {
     if (uid.isEmpty) return;
-    final docId = getProgressDocId(subjectTitle, semester: semester);
+    final docId = getProgressDocId(subjectTitle, semester: semester, grade: grade);
     await _db
         .collection('users')
         .doc(uid)

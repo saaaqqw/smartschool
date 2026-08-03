@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'db_keys.dart';
 
 /// خدمة تنظيف قاعدة البيانات (Database Cleanup Service)
 ///
@@ -92,9 +93,9 @@ class DatabaseCleanupService {
       for (final doc in gradesSnap.docs) {
         final data = doc.data();
         final userId = data['userId'] as String?;
-        // إذا كان معرف المستند لا يحتوي على شرطة سفلية (أي ليس بالصيغة uid_subject)
+        // إذا كان معرف المستند لا يحتوي على شرطتين سفليتين (أي ليس بالصيغة uid__subject__grade__semester)
         // أو إذا كان حقل userId فارغاً أو مفقوداً
-        if (!doc.id.contains('_') || userId == null || userId.isEmpty) {
+        if (!doc.id.contains('__') || userId == null || userId.isEmpty) {
           await doc.reference.delete();
           totalDeleted++;
         }
@@ -106,6 +107,54 @@ class DatabaseCleanupService {
     return totalDeleted;
   }
 
+  /// ترحيل المناهج (الدروس والفيديوهات والأسئلة) من المسارات القديمة (المادة - الصف) 
+  /// إلى المسارات الجديدة المعتمدة على الثالوث (المادة__الصف__الفصل).
+  static Future<void> migrateOldSubjectsToNewFormat() async {
+    try {
+      debugPrint('🔄 [DatabaseCleanupService] بدء ترحيل المناهج من النظام القديم إلى الجديد...');
+      final subjectsSnap = await _db.collection('subjects').get();
+      int migratedCount = 0;
+
+      for (final oldDoc in subjectsSnap.docs) {
+        if (oldDoc.id.contains(' - ')) {
+          final data = oldDoc.data();
+          final parts = oldDoc.id.split(' - ');
+          final title = data['title'] as String? ?? parts.first.trim();
+          final grade = data['grade'] as String? ?? parts.last.trim();
+          final units = data['units'];
+
+          if (units != null) {
+            // ترحيل البيانات إلى كلا الفصلين لضمان عدم ضياعها
+            for (final semester in ['الفصل الدراسي الأول', 'الفصل الدراسي الثاني']) {
+              final newDocId = DbKeys.subjectDoc(
+                subjectTitle: title,
+                grade: grade,
+                semester: semester,
+              );
+              
+              await _db.collection('subjects').doc(newDocId).set({
+                'subjectId': data['subjectId'] ?? title,
+                'title': title,
+                'grade': grade,
+                'semester': semester,
+                'units': units,
+                if (data.containsKey('bookUrl')) 'bookUrl': data['bookUrl'],
+                if (data.containsKey('bookTitle')) 'bookTitle': data['bookTitle'],
+                'createdAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+            }
+            migratedCount++;
+            // اختياريا: يمكن حذف المستند القديم هنا بعد الترحيل الناجح
+            // await oldDoc.reference.delete();
+          }
+        }
+      }
+      debugPrint('✅ [DatabaseCleanupService] تم ترحيل $migratedCount منهج بنجاح!');
+    } catch (e) {
+      debugPrint('❌ [DatabaseCleanupService] خطأ أثناء الترحيل: $e');
+    }
+  }
+
   /// الفحص والتنظيف الشامل لقاعدة البيانات بصمت (صالح للاستدعاء التلقائي عند فتح لوحة المطور)
   static Future<void> cleanAllOnce() async {
     try {
@@ -113,6 +162,7 @@ class DatabaseCleanupService {
       final subCount = await cleanOldSubcollections();
       final engCount = await deleteEnglishDuplicateSubjects();
       final gradesCount = await cleanOldUnscopedGrades();
+      await migrateOldSubjectsToNewFormat(); // إضافة الترحيل هنا ليتم استدعاؤه تلقائياً
       final total = subCount + engCount + gradesCount;
       if (total > 0) {
         debugPrint(

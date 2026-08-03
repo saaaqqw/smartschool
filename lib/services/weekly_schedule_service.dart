@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'smart_notification_service.dart';
+import 'notification_cache_service.dart';
+import 'ai_notification_generator.dart';
 /// يمثّل الجدول الدراسي الأسبوعي وإعدادات وقت الدراسة للطالب.
 class WeeklySchedule {
   /// مفاتيح أيام الأسبوع بالعربية
@@ -96,6 +98,34 @@ class WeeklyScheduleService {
       {_docField: ws.toMap()},
       SetOptions(merge: true),
     );
+
+    // جدولة الإشعارات الخاصة بالدراسة
+    try {
+      final name = await NotificationCacheService.getStudentName();
+      
+      // التوليد المسبق لرسالة الصباح الذكية (يحدث في الخلفية عبر الـ API)
+      AiNotificationGenerator.generateMorningMotivation(name, ws.schedule[WeeklySchedule.dayKeys.first] ?? []).then((aiMessage) {
+        if (aiMessage != null && aiMessage.isNotEmpty) {
+          NotificationCacheService.saveMorningAiMessage(aiMessage);
+        }
+      });
+
+      // جدولة إشعار يومي قبل 15 دقيقة من موعد الدراسة
+      final now = DateTime.now();
+      var scheduled = DateTime(now.year, now.month, now.day, ws.startHour, ws.startMinute).subtract(const Duration(minutes: 15));
+      if (now.isAfter(scheduled)) {
+        scheduled = scheduled.add(const Duration(days: 1));
+      }
+
+      await SmartNotificationService.scheduleStudyReminder(
+        1001, 
+        scheduled, 
+        name, 
+        ws.schedule[WeeklySchedule.dayKeys[now.weekday % 7]] ?? []
+      );
+    } catch (e) {
+      // تجاهل أخطاء الإشعارات
+    }
   }
 
   /// قراءة الجدول مرة واحدة.

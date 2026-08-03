@@ -101,7 +101,9 @@ class _LoginScreenState extends State<LoginScreen> {
           pin: model.pin.isNotEmpty ? model.pin : password,
         );
         await saveUserProfile(profile);
-        isProfileIncomplete = profile.fullName.trim().isEmpty;
+        isProfileIncomplete = profile.fullName.trim().isEmpty || 
+                              profile.school.trim().isEmpty || 
+                              profile.age == 0;
       } else if (uid.isNotEmpty) {
         await saveUserProfile(UserProfile(
           uid: uid,
@@ -191,7 +193,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (model != null) {
         await saveUserProfile(UserProfile.fromUserModel(model));
-        isProfileIncomplete = model.fullName.trim().isEmpty;
+        isProfileIncomplete = model.fullName.trim().isEmpty || 
+                              model.school.trim().isEmpty || 
+                              model.age == 0;
       } else if (uid.isNotEmpty) {
         await saveUserProfile(UserProfile(
           uid: uid,
@@ -202,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
           gender: ProfileEditorScreen.genderOptions.first,
           profileImageUrl: creds.user?.photoURL ?? '',
         ));
-        isProfileIncomplete = creds.user?.displayName == null || creds.user!.displayName!.isEmpty;
+        isProfileIncomplete = true;
       }
 
       if (!mounted) return;

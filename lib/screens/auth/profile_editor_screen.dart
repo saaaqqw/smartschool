@@ -272,14 +272,53 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
         ),
         Row(
           children: ProfileEditorScreen.genderOptions.map((g) {
+            final isSelected = _gender == g;
             return Expanded(
-              child: RadioListTile<String>(
-                value: g,
-                groupValue: _gender,
-                onChanged: (v) { if (v != null) setState(() => _gender = v); },
-                title: Text(g, style: GoogleFonts.tajawal(fontSize: 16)),
-                contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: g == ProfileEditorScreen.genderOptions.first ? 6.0 : 0.0,
+                  right: g == ProfileEditorScreen.genderOptions.last ? 6.0 : 0.0,
+                ),
+                child: InkWell(
+                  onTap: () => setState(() => _gender = g),
+                  borderRadius: BorderRadius.circular(12),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isSelected 
+                          ? scheme.primary.withValues(alpha: 0.1) 
+                          : scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? scheme.primary : Colors.transparent,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            g == 'ذكر' ? Icons.face_rounded : Icons.face_3_rounded,
+                            color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            g,
+                            style: GoogleFonts.tajawal(
+                              fontSize: 16,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             );
           }).toList(),

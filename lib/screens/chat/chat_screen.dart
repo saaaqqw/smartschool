@@ -13,16 +13,30 @@ import '../../services/connectivity_service.dart';
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
-    this.subjectTitle,
+    this.subjectName,
+    this.unitName,
+    this.lessonName,
+    this.lessonContent,
   });
 
-  /// Optional: title of the current subject/unit to provide context.
-  final String? subjectTitle;
+  final String? subjectName;
+  final String? unitName;
+  final String? lessonName;
+  final String? lessonContent;
 
-  static Route<void> route({String? subjectTitle}) {
+  static Route<void> route({
+    String? subjectName,
+    String? unitName,
+    String? lessonName,
+    String? lessonContent,
+  }) {
     return PageRouteBuilder<void>(
-      pageBuilder: (context, animation, secondaryAnimation) =>
-          ChatScreen(subjectTitle: subjectTitle),
+      pageBuilder: (context, animation, secondaryAnimation) => ChatScreen(
+        subjectName: subjectName,
+        unitName: unitName,
+        lessonName: lessonName,
+        lessonContent: lessonContent,
+      ),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: CurvedAnimation(
@@ -75,23 +89,29 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  final List<_ChatMessage> _messages = [
-    const _ChatMessage(
-      text:
-          'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.',
-      isUser: false,
-    ),
-  ];
+  final List<_ChatMessage> _messages = [];
 
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    _initializeWelcomeMessage();
     _loadChatHistory();
   }
 
-  String get _chatStorageKey => 'chat_history_${widget.subjectTitle ?? "general"}';
+  void _initializeWelcomeMessage() {
+    String welcomeText = 'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.';
+    if (widget.lessonName != null && widget.unitName != null) {
+      welcomeText = 'مرحباً بك في درس (${widget.lessonName}) من وحدة (${widget.unitName})! أنا هنا لمساعدتك، هل لديك سؤال حول هذا الدرس؟';
+    }
+    _messages.add(_ChatMessage(text: welcomeText, isUser: false));
+  }
+
+  String get _chatStorageKey {
+    final base = widget.lessonName ?? widget.subjectName ?? 'general';
+    return 'chat_history_$base';
+  }
 
   Future<void> _loadChatHistory() async {
     try {
@@ -132,12 +152,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await prefs.remove(_chatStorageKey);
       setState(() {
         _messages.clear();
-        _messages.add(
-          const _ChatMessage(
-            text: 'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.',
-            isUser: false,
-          ),
-        );
+        _initializeWelcomeMessage();
       });
     } catch (e) {
       debugPrint('Error clearing chat history: $e');
@@ -146,7 +161,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<String> _generateReply(String userText) async {
     // 1. توليد مفتاح فريد مشفر للكاش بناءً على نص السؤال والمادة
-    final rawKey = 'ai_cache_${widget.subjectTitle ?? "general"}_$userText';
+    final base = widget.lessonName ?? widget.subjectName ?? "general";
+    final rawKey = 'ai_cache_${base}_$userText';
     final cacheKey = base64UrlEncode(utf8.encode(rawKey));
 
     // 2. التحقق من وجود إجابة مسبقة في الكاش المحلي (للسرعة وتوفير البيانات)
@@ -162,8 +178,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final prompt = [
       'أنت مساعد تعليمي ذكي للطلاب في تطبيق Smart School. اشرح لي دائماً باللغة العربية بشكل مبسط ومنظم.',
-      if (widget.subjectTitle != null && widget.subjectTitle!.trim().isNotEmpty)
-        'سياق دراستي الحالي هو: ${widget.subjectTitle!.trim()}. وجه إجاباتك بما يناسب هذا الموضوع.',
+      if (widget.subjectName != null && widget.subjectName!.trim().isNotEmpty)
+        'أنا حالياً أدرس مادة: ${widget.subjectName!.trim()}.',
+      if (widget.unitName != null && widget.unitName!.trim().isNotEmpty)
+        'في الوحدة: ${widget.unitName!.trim()}.',
+      if (widget.lessonName != null && widget.lessonName!.trim().isNotEmpty)
+        'ودرسي الحالي هو: ${widget.lessonName!.trim()}.',
+      if (widget.lessonContent != null && widget.lessonContent!.trim().isNotEmpty)
+        'محتوى وملخص الدرس هو التالي (اعتمد عليه في إجاباتك): \n${widget.lessonContent!.trim()}',
       'سؤال الطالب: $userText',
       'قدّم الإجابة في نقاط مرتبة قدر الإمكان. إذا كان السؤال يتطلب خطوة/حل، ابدأ بالخطوة الأولى ثم التالية.',
     ].join('\n');

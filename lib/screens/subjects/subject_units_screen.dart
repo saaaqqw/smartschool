@@ -50,7 +50,7 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
 
   void _openChat() {
     Navigator.of(context).push(
-      ChatScreen.route(subjectTitle: widget.subject.title),
+      ChatScreen.route(subjectName: widget.subject.title),
     );
   }
 
@@ -72,12 +72,14 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
       body: StreamBuilder<DocumentSnapshot>(
         stream: uid.isEmpty
             ? const Stream.empty()
-            : _firebaseService.getProgressStream(uid, widget.subject.title, semester: semester),
+            : _firebaseService.getProgressStream(uid, widget.subject.title, semester: semester, grade: cleanGrade),
         builder: (context, snapshot) {
           Map<String, dynamic> progressData = {};
+          int currentUnitIndex = 0;
           if (snapshot.hasData && snapshot.data!.exists) {
             final data = snapshot.data!.data() as Map<String, dynamic>?;
             progressData = data?['unitProgress'] as Map<String, dynamic>? ?? {};
+            currentUnitIndex = (data?['currentUnitIndex'] as num?)?.toInt() ?? 0;
           }
 
           return StreamBuilder<DocumentSnapshot>(
@@ -197,21 +199,34 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                             progressData[unit.title] as double?;
                         final currentProgress =
                             firestoreProgress ?? unit.progress;
+                        final isLocked = index > currentUnitIndex;
 
                         return _UnitCard(
                           subject: widget.subject,
                           unit: unit,
                           index: index,
                           actualProgress: currentProgress,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              UnitDetailScreen.route(
-                                subject: widget.subject,
-                                unit: unit,
-                                unitIndex: index,
-                              ),
-                            );
-                          },
+                          isLocked: isLocked,
+                          onTap: isLocked
+                              ? () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'يجب إكمال الوحدات السابقة أولاً لتتمكن من فتح هذه الوحدة.'),
+                                      behavior: SnackBarBehavior.floating,
+                                      backgroundColor: scheme.error,
+                                    ),
+                                  );
+                                }
+                              : () {
+                                  Navigator.of(context).push(
+                                    UnitDetailScreen.route(
+                                      subject: widget.subject,
+                                      unit: unit,
+                                      unitIndex: index,
+                                    ),
+                                  );
+                                },
                         );
                       },
                     ),
@@ -238,6 +253,7 @@ class _UnitCard extends StatelessWidget {
     required this.unit,
     required this.index,
     required this.actualProgress,
+    required this.isLocked,
     required this.onTap,
   });
 
@@ -245,6 +261,7 @@ class _UnitCard extends StatelessWidget {
   final CurriculumUnit unit;
   final int index;
   final double actualProgress;
+  final bool isLocked;
   final VoidCallback onTap;
 
   @override
@@ -270,12 +287,14 @@ class _UnitCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: subject.color.withValues(alpha: 0.2),
+                  color: isLocked
+                      ? scheme.onSurface.withValues(alpha: 0.1)
+                      : subject.color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
-                  unit.icon,
-                  color: subject.color,
+                  isLocked ? Icons.lock_rounded : unit.icon,
+                  color: isLocked ? scheme.onSurfaceVariant : subject.color,
                   size: 26,
                 ),
               ),
@@ -297,7 +316,9 @@ class _UnitCard extends StatelessWidget {
                       style: GoogleFonts.tajawal(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: scheme.onSurface,
+                        color: isLocked
+                            ? scheme.onSurface.withValues(alpha: 0.5)
+                            : scheme.onSurface,
                         height: 1.3,
                       ),
                     ),
@@ -339,8 +360,8 @@ class _UnitCard extends StatelessWidget {
                 ),
               ),
               Icon(
-                Icons.chevron_left_rounded,
-                color: scheme.outline,
+                isLocked ? Icons.lock_outline_rounded : Icons.chevron_left_rounded,
+                color: isLocked ? scheme.outline.withValues(alpha: 0.5) : scheme.outline,
               ),
             ],
           ),

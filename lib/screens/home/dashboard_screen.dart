@@ -127,10 +127,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 int count = 0;
 
                 if (snapshot.hasData) {
-                  final isSecondSemester = profile.semester == 'الفصل الدراسي الثاني';
+                  final cleanGrade = profile.grade.isEmpty ? 'الصف السابع' : profile.grade;
+                  final suffix = '__${cleanGrade}__${profile.semester}';
+                  
                   for (var doc in snapshot.data!.docs) {
-                    final isDocSecondSem = doc.id.endsWith(' - الفصل الدراسي الثاني');
-                    if (isSecondSemester != isDocSecondSem) continue;
+                    if (!doc.id.endsWith(suffix)) continue;
 
                     final data = doc.data() as Map<String, dynamic>?;
                     final unitProgress = data?['unitProgress'] as Map<String, dynamic>? ?? {};

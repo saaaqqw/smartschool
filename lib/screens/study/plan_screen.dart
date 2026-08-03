@@ -336,6 +336,7 @@ class _SubjectTaskTile extends StatelessWidget {
         subject: schoolSubject,
         unit: currentUnit,
         lessonNumber: lesson?.lessonNumber ?? currentLessonNumber,
+        lessonTitle: lesson?.title ?? 'الدرس $currentLessonNumber',
         videoId: lesson?.videoUrl ?? '',
         subjectDocId: subjectDocId,
         unitIndex: unitIndex,
@@ -354,12 +355,14 @@ class _SubjectTaskTile extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
-      child: Material(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
+      child: Opacity(
+        opacity: done ? 0.5 : 1.0,
+        child: Material(
+          color: bg,
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _navigateToCurrentLesson(context),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: done ? null : () => _navigateToCurrentLesson(context),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
             child: Row(
@@ -438,6 +441,7 @@ class _SubjectTaskTile extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -791,6 +795,7 @@ class _AiScheduleImprovementSectionState extends State<_AiScheduleImprovementSec
           subject: schoolSubject,
           unit: currentUnit,
           lessonNumber: lesson?.lessonNumber ?? currentLessonNumber,
+          lessonTitle: lesson?.title ?? 'الدرس $currentLessonNumber',
           videoId: lesson?.videoUrl ?? '',
           subjectDocId: subjectDocId,
           unitIndex: unitIndex,

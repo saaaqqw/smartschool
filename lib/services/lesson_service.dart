@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/models/lesson_model.dart';
 import '../core/stores/user_profile_store.dart';
+import 'db_keys.dart';
 
 /// خدمة Firestore للدروس والأسئلة المرتبطة بها.
 ///
@@ -36,12 +37,25 @@ class LessonService {
     }
 
     final uid = userProfileNotifier.value.uid;
-    final cleanTitle = subjectId.split(' - ').first;
+    final grade = userProfileNotifier.value.grade;
+    final semester = userProfileNotifier.value.semester;
+
+    // ★ استخدام DbKeys لضمان فصل تام بين الصفوف والفصول
+    final parsed = DbKeys.parseSubjectDoc(subjectId);
+    final subjectTitle = parsed['title']!;
+
     Map<String, dynamic> scores = {};
     if (uid.isNotEmpty) {
-      final gradesDoc = await _db.collection('grades').doc('${uid}_$cleanTitle').get();
+      final gradesDocId = DbKeys.gradesDoc(
+        uid: uid,
+        subjectTitle: subjectTitle,
+        grade: grade,
+        semester: semester,
+      );
+      final gradesDoc = await _db.collection('grades').doc(gradesDocId).get();
       if (gradesDoc.exists && gradesDoc.data() != null) {
-        scores = Map<String, dynamic>.from(gradesDoc.data()!['lessonScores'] as Map? ?? {});
+        scores = Map<String, dynamic>.from(
+            gradesDoc.data()!['lessonScores'] as Map? ?? {});
       }
     }
 
@@ -53,9 +67,12 @@ class LessonService {
       final lData = lessonsRaw[i] is Map ? lessonsRaw[i] as Map : {};
       final title = lData['title'] as String? ?? 'الدرس ${i + 1}';
       final videoUrl = lData['videoUrl'] as String? ?? '';
-      final numStr = '${i + 1}';
-      final studentGrade = scores.containsKey(numStr) ? (scores[numStr] as num?)?.toDouble() : null;
-      final grade = studentGrade ?? ((lData['lessonGrade'] as num?)?.toDouble() ?? 0.0);
+      // ★ مفتاح موحّد u{unit}_l{lesson} دائماً
+      final scoreKey = DbKeys.lessonScoreKey(unitIndex, i + 1);
+      final studentGrade = scores.containsKey(scoreKey)
+          ? (scores[scoreKey] as num?)?.toDouble()
+          : null;
+      final grade = studentGrade ?? 0.0;
 
       results.add(LessonModel(
         id: 'lesson_${i + 1}',
@@ -75,11 +92,24 @@ class LessonService {
     required int unitIndex,
   }) {
     final uid = userProfileNotifier.value.uid;
-    final cleanTitle = subjectId.split(' - ').first;
+    final grade = userProfileNotifier.value.grade;
+    final semester = userProfileNotifier.value.semester;
+
+    // ★ استخدام DbKeys للحصول على مستند الدرجات الصحيح
+    final parsed = DbKeys.parseSubjectDoc(subjectId);
+    final subjectTitle = parsed['title']!;
+    final gradesDocId = uid.isNotEmpty
+        ? DbKeys.gradesDoc(
+            uid: uid,
+            subjectTitle: subjectTitle,
+            grade: grade,
+            semester: semester,
+          )
+        : '';
 
     final subjectStream = _db.collection('subjects').doc(subjectId).snapshots();
     final gradesStream = uid.isNotEmpty
-        ? _db.collection('grades').doc('${uid}_$cleanTitle').snapshots()
+        ? _db.collection('grades').doc(gradesDocId).snapshots()
         : Stream<DocumentSnapshot<Map<String, dynamic>>?>.value(null);
 
     late StreamController<List<LessonModel>> controller;
@@ -114,11 +144,12 @@ class LessonService {
         final lData = lessonsRaw[i] is Map ? lessonsRaw[i] as Map : {};
         final title = lData['title'] as String? ?? 'الدرس ${i + 1}';
         final videoUrl = lData['videoUrl'] as String? ?? '';
-        final numStr = '${i + 1}';
-        final studentGrade = scores.containsKey(numStr)
-            ? (scores[numStr] as num?)?.toDouble()
+        // ★ مفتاح موحّد u{unit}_l{lesson} دائماً
+        final scoreKey = DbKeys.lessonScoreKey(unitIndex, i + 1);
+        final studentGrade = scores.containsKey(scoreKey)
+            ? (scores[scoreKey] as num?)?.toDouble()
             : null;
-        final grade = studentGrade ?? ((lData['lessonGrade'] as num?)?.toDouble() ?? 0.0);
+        final grade = studentGrade ?? 0.0;
 
         results.add(LessonModel(
           id: 'lesson_${i + 1}',
@@ -230,12 +261,26 @@ class LessonService {
     required double newScore,
   }) async {
     final lessonNum = _parseLessonNum(lessonId);
-    final String scoreKey = unitIndex != null ? 'u${unitIndex}_l$lessonNum' : '$lessonNum';
+    // ★ مفتاح موحّد دائماً: u{unit}_l{lesson}
+    final String scoreKey = unitIndex != null
+        ? DbKeys.lessonScoreKey(unitIndex, lessonNum)
+        : 'u0_l$lessonNum';
+
     final uid = userProfileNotifier.value.uid;
+    final grade = userProfileNotifier.value.grade;
+    final semester = userProfileNotifier.value.semester;
     if (uid.isEmpty) return false;
 
-    final cleanTitle = subjectId.split(' - ').first;
-    final gradesDocRef = _db.collection('grades').doc('${uid}_$cleanTitle');
+    // ★ استخدام DbKeys لضمان مستند درجات منفصل لكل صف وفصل
+    final parsed = DbKeys.parseSubjectDoc(subjectId);
+    final subjectTitle = parsed['title']!;
+    final gradesDocId = DbKeys.gradesDoc(
+      uid: uid,
+      subjectTitle: subjectTitle,
+      grade: grade,
+      semester: semester,
+    );
+    final gradesDocRef = _db.collection('grades').doc(gradesDocId);
 
     return _db.runTransaction<bool>((tx) async {
       // 1. قراءة مستند درجات الطالب الخاص في هذه المادة
@@ -249,8 +294,8 @@ class LessonService {
       if (newScore > currentLessonScore || !lessonScores.containsKey(scoreKey)) {
         lessonScores[scoreKey] = newScore;
       } else {
-        // الدرجة الحالية أفضل أو مساوية، لا داعي للتحديث
-        return true;
+        // الدرجة الحالية أفضل أو مساوية، لا تعتبر رقماً قياسياً جديداً
+        return false;
       }
 
       // 3. حساب المعدل العام للمادة للطالب بناءً على متوسط الدروس المنجزة والمختبرة فقط
@@ -267,7 +312,9 @@ class LessonService {
         gradesDocRef,
         {
           'userId': uid,
-          'subjectId': cleanTitle,
+          'subjectTitle': subjectTitle,
+          'grade': grade,
+          'semester': semester,
           'score': (overallRatio * 100.0).clamp(0.0, 100.0),
           'maxScore': 100.0,
           'lessonScores': lessonScores,
@@ -287,30 +334,29 @@ class LessonService {
     int? unitIndex,
   }) async {
     final lessonNum = _parseLessonNum(lessonId);
-    final String scoreKey = unitIndex != null ? 'u${unitIndex}_l$lessonNum' : '$lessonNum';
+    // ★ مفتاح موحّد دائماً
+    final String scoreKey = unitIndex != null
+        ? DbKeys.lessonScoreKey(unitIndex, lessonNum)
+        : 'u0_l$lessonNum';
+
     final uid = userProfileNotifier.value.uid;
+    final grade = userProfileNotifier.value.grade;
+    final semester = userProfileNotifier.value.semester;
+
     if (uid.isNotEmpty) {
-      final cleanTitle = subjectId.split(' - ').first;
-      final gradeDoc = await _db.collection('grades').doc('${uid}_$cleanTitle').get();
+      final parsed = DbKeys.parseSubjectDoc(subjectId);
+      final subjectTitle = parsed['title']!;
+      final gradesDocId = DbKeys.gradesDoc(
+        uid: uid,
+        subjectTitle: subjectTitle,
+        grade: grade,
+        semester: semester,
+      );
+      final gradeDoc = await _db.collection('grades').doc(gradesDocId).get();
       if (gradeDoc.exists && gradeDoc.data() != null) {
         final scores = gradeDoc.data()!['lessonScores'] as Map? ?? {};
         if (scores.containsKey(scoreKey)) {
           return (scores[scoreKey] as num?)?.toDouble() ?? 0.0;
-        }
-      }
-    }
-
-    final doc = await _db.collection('subjects').doc(subjectId).get();
-    if (!doc.exists || doc.data() == null) return 0.0;
-
-    final unitsRaw = doc.data()!['units'] as List? ?? [];
-    for (int uIdx = 0; uIdx < unitsRaw.length; uIdx++) {
-      if (unitsRaw[uIdx] is Map) {
-        final uMap = unitsRaw[uIdx] as Map;
-        final lList = uMap['lessons'] as List? ?? [];
-        if (lessonNum - 1 < lList.length && lList[lessonNum - 1] is Map) {
-          final lMap = lList[lessonNum - 1] as Map;
-          return (lMap['lessonGrade'] as num?)?.toDouble() ?? 0.0;
         }
       }
     }

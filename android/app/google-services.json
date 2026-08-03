@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "33603645555-7qset6ioh5sgvrrdeho9gta25h6seath.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.smart_school1",
+            "certificate_hash": "0c18d5b87246b2a243e9f77831f380df52bdec60"
+          }
+        },
+        {
           "client_id": "33603645555-5otobb4e60hpcee4kuf31kbs0bv5eelg.apps.googleusercontent.com",
           "client_type": 3
         }

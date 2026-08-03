@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io';
 import '../data/models/user_model.dart';
 import 'firebase_sync_service.dart';
+import 'db_keys.dart';
 
 class FirebaseService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -82,8 +83,13 @@ class FirebaseService {
     String unitTitle,
     double progress, {
     String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
   }) async {
-    final docId = FirebaseSyncService.getProgressDocId(subjectId, semester: semester);
+    final docId = DbKeys.progressDoc(
+      subjectTitle: subjectId,
+      grade: grade,
+      semester: semester,
+    );
     final docRef = _db.collection('users').doc(userId).collection('progress').doc(docId);
     
     await docRef.set({
@@ -103,8 +109,13 @@ class FirebaseService {
     required int maxLessonsInUnit,
     required int maxUnits,
     String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
   }) async {
-    final docId = FirebaseSyncService.getProgressDocId(subjectTitle, semester: semester);
+    final docId = DbKeys.progressDoc(
+      subjectTitle: subjectTitle,
+      grade: grade,
+      semester: semester,
+    );
     final docRef = _db
         .collection('users')
         .doc(uid)
@@ -128,7 +139,7 @@ class FirebaseService {
       'currentUnitIndex': nextUnit,
       'currentLessonNumber': nextLesson,
       'completed_lessons_set': FieldValue.arrayUnion([
-        'u${currentUnitIndex}_l$currentLessonNumber',
+        DbKeys.lessonScoreKey(currentUnitIndex, currentLessonNumber),
       ]),
       'lastUpdated': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -138,8 +149,13 @@ class FirebaseService {
     String userId,
     String subjectId, {
     String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
   }) {
-    final docId = FirebaseSyncService.getProgressDocId(subjectId, semester: semester);
+    final docId = DbKeys.progressDoc(
+      subjectTitle: subjectId,
+      grade: grade,
+      semester: semester,
+    );
     return _db.collection('users').doc(userId).collection('progress').doc(docId).snapshots();
   }
 
@@ -155,17 +171,40 @@ class FirebaseService {
 
   // --- Grades ---
 
-  Future<void> saveGrade(String userId, String subjectId, double score, double maxScore) async {
-    await _db.collection('grades').doc('${userId}_$subjectId').set({
+  Future<void> saveGrade(
+    String userId, 
+    String subjectId, 
+    double score, 
+    double maxScore, {
+    String semester = 'الفصل الدراسي الأول', 
+    String grade = 'الصف السابع',
+  }) async {
+    final docId = DbKeys.gradesDoc(
+      uid: userId,
+      subjectTitle: subjectId,
+      grade: grade,
+      semester: semester,
+    );
+    await _db.collection('grades').doc(docId).set({
       'userId': userId,
       'subjectId': subjectId,
+      'grade': grade,
+      'semester': semester,
       'score': score,
       'maxScore': maxScore,
       'timestamp': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
-  Stream<QuerySnapshot> getGradesStream(String userId) {
-    return _db.collection('grades').where('userId', isEqualTo: userId).snapshots();
+  Stream<QuerySnapshot> getGradesStream(
+    String userId, {
+    String semester = 'الفصل الدراسي الأول',
+    String grade = 'الصف السابع',
+  }) {
+    return _db.collection('grades')
+        .where('userId', isEqualTo: userId)
+        .where('semester', isEqualTo: semester)
+        .where('grade', isEqualTo: grade)
+        .snapshots();
   }
 }

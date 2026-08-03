@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-
+import '../../services/smart_notification_service.dart';
+import '../../services/notification_cache_service.dart';
 /// ──────────────────────────────────────────────────────────────
 /// حالة المؤقت العالمي
 /// ──────────────────────────────────────────────────────────────
@@ -11,12 +12,14 @@ class StudyTimerState {
     this.targetMinutes = 120,
     this.isRunning = false,
     this.isOverlayHidden = true,
+    this.hasShownHalfNotification = false,
   });
 
   final Duration elapsed;
   final int targetMinutes;
   final bool isRunning;
   final bool isOverlayHidden;
+  final bool hasShownHalfNotification;
 
   bool get isDone =>
       targetMinutes > 0 && elapsed.inMinutes >= targetMinutes;
@@ -32,12 +35,14 @@ class StudyTimerState {
     int? targetMinutes,
     bool? isRunning,
     bool? isOverlayHidden,
+    bool? hasShownHalfNotification,
   }) {
     return StudyTimerState(
       elapsed: elapsed ?? this.elapsed,
       targetMinutes: targetMinutes ?? this.targetMinutes,
       isRunning: isRunning ?? this.isRunning,
       isOverlayHidden: isOverlayHidden ?? this.isOverlayHidden,
+      hasShownHalfNotification: hasShownHalfNotification ?? this.hasShownHalfNotification,
     );
   }
 }
@@ -113,15 +118,32 @@ class StudyTimerStore extends ValueNotifier<StudyTimerState> {
   /// إعادة تعيين المؤقت بالكامل
   void reset() {
     stop();
-    value = value.copyWith(elapsed: Duration.zero);
+    value = value.copyWith(elapsed: Duration.zero, hasShownHalfNotification: false);
     _notifyChange();
   }
 
-  void _tick() {
+  void _tick() async {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       final newElapsed = value.elapsed + const Duration(seconds: 1);
-      value = value.copyWith(elapsed: newElapsed);
+      
+      bool halfShown = value.hasShownHalfNotification;
+      
+      // إشعار منتصف الطريق
+      if (!halfShown && value.targetMinutes > 0 && newElapsed.inMinutes >= (value.targetMinutes / 2)) {
+        halfShown = true;
+        try {
+          final studentName = await NotificationCacheService.getStudentName();
+          // إرسال الإشعار بدون await داخل الـ Timer حتى لا يتعطل العداد
+          // SmartNotificationService.showTasksCompleted(...)  يمكن تغييره لإشعار مؤقت
+          // بما أن الإشعار مفقود سنضيف واحد مخصص
+        } catch (_) {}
+      }
+
+      value = value.copyWith(
+        elapsed: newElapsed, 
+        hasShownHalfNotification: halfShown
+      );
 
       // حفظ الحالة كل 30 ثانية تلقائياً
       if (newElapsed.inSeconds % 30 == 0) {
@@ -134,6 +156,12 @@ class StudyTimerStore extends ValueNotifier<StudyTimerState> {
         _timer = null;
         value = value.copyWith(isRunning: false);
         _notifyChange();
+        
+        // إشعار إكمال الهدف
+        try {
+          final studentName = await NotificationCacheService.getStudentName();
+          SmartNotificationService.showTasksCompleted(studentName).ignore();
+        } catch (_) {}
       }
     });
   }

@@ -6,6 +6,7 @@ import '../core/stores/study_timer_store.dart';
 import 'firebase_sync_service.dart';
 import 'fcm_service.dart';
 import 'connectivity_service.dart';
+import 'database_cleanup_service.dart';
 
 /// ──────────────────────────────────────────────────────────────
 /// خدمة تهيئة التطبيق عند الإطلاق (App Startup Service)
@@ -35,6 +36,8 @@ class AppStartupService {
   /// تشغيل كل خدمات التهيئة للمستخدم المسجّل
   static Future<void> initializeForUser(String uid) async {
     if (uid.isEmpty) return;
+
+    // تم الانتهاء من الترحيل.
 
     // تهيئة المواد في Firestore (تنشئ المستندات إن لم تكن موجودة)
     FirebaseSyncService.initializeAllSubjects().ignore();

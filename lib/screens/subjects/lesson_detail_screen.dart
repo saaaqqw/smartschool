@@ -22,6 +22,7 @@ class LessonDetailScreen extends StatefulWidget {
     required this.subject,
     required this.unit,
     required this.lessonNumber,
+    required this.lessonTitle,
     required this.videoId,
     required this.subjectDocId,
     required this.unitIndex,
@@ -31,6 +32,7 @@ class LessonDetailScreen extends StatefulWidget {
   final SchoolSubject subject;
   final CurriculumUnit unit;
   final int lessonNumber;
+  final String lessonTitle;
   final String videoId;
   final String subjectDocId;
   final int unitIndex;
@@ -43,6 +45,7 @@ class LessonDetailScreen extends StatefulWidget {
     required SchoolSubject subject,
     required CurriculumUnit unit,
     required int lessonNumber,
+    required String lessonTitle,
     required String videoId,
     String subjectDocId = '',
     int unitIndex = 0,
@@ -53,6 +56,7 @@ class LessonDetailScreen extends StatefulWidget {
         subject: subject,
         unit: unit,
         lessonNumber: lessonNumber,
+        lessonTitle: lessonTitle,
         videoId: videoId,
         subjectDocId: subjectDocId,
         unitIndex: unitIndex,
@@ -205,6 +209,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       } catch (_) {}
 
       final currentSemester = userProfileNotifier.value.semester;
+      final currentGrade = userProfileNotifier.value.grade;
       await _firebaseService.advanceLessonProgress(
         uid: uid,
         subjectTitle: widget.subject.title,
@@ -213,10 +218,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         maxLessonsInUnit: maxLessons,
         maxUnits: widget.subject.units.length,
         semester: currentSemester,
+        grade: currentGrade,
       );
 
       FirebaseSyncService.incrementLessonsCompleted(
-          uid, widget.subject.title, semester: currentSemester).ignore();
+          uid, widget.subject.title,
+          semester: currentSemester,
+          grade: currentGrade,
+      ).ignore();
 
       if (!mounted) return;
       setState(() {
@@ -551,6 +560,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       } catch (_) {}
 
       final currentSemester = userProfileNotifier.value.semester;
+      final currentGrade = userProfileNotifier.value.grade;
       await _firebaseService.advanceLessonProgress(
         uid: uid,
         subjectTitle: widget.subject.title,
@@ -559,10 +569,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         maxLessonsInUnit: maxLessons,
         maxUnits: widget.subject.units.length,
         semester: currentSemester,
+        grade: currentGrade,
       );
 
       FirebaseSyncService.incrementLessonsCompleted(
-        uid, widget.subject.title, semester: currentSemester).ignore();
+        uid, widget.subject.title,
+        semester: currentSemester,
+        grade: currentGrade,
+      ).ignore();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -596,6 +610,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     final scheme = Theme.of(context).colorScheme;
     final uid = userProfileNotifier.value.uid;
     final currentSemester = userProfileNotifier.value.semester;
+    final currentGrade = userProfileNotifier.value.grade;
 
     if (_isVideoFullScreen) {
       return Scaffold(
@@ -606,7 +621,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             videoId: widget.videoId,
             autoPlay: false,
             subjectColor: widget.subject.color,
-            lessonTitle: 'الدرس ${widget.lessonNumber} — ${widget.unit.title}',
+            lessonTitle: 'الدرس ${widget.lessonNumber} — ${widget.lessonTitle}',
             onFullScreenChange: _onFullScreenChanged,
           ),
         ),
@@ -626,8 +641,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         onPressed: () {
           Navigator.of(context).push(
             ChatScreen.route(
-              subjectTitle:
-                  '${widget.subject.title} - ${widget.unit.title} - درس ${widget.lessonNumber}',
+              subjectName: widget.subject.title,
+              unitName: widget.unit.title,
+              lessonName: widget.lessonTitle,
+              lessonContent: _summaryData != null 
+                  ? (_summaryData!['summaryContent'] ?? _summaryData!['content'] as String?) 
+                  : null,
             ),
           );
         },
@@ -639,6 +658,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                 uid,
                 widget.subject.title,
                 semester: currentSemester,
+                grade: currentGrade,
               )
             : const Stream.empty(),
         builder: (context, snapshot) {
@@ -689,7 +709,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        widget.unit.title,
+                        widget.lessonTitle.isNotEmpty ? widget.lessonTitle : 'الدرس ${widget.lessonNumber}',
                         style: GoogleFonts.tajawal(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -698,6 +718,15 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
+                      Text(
+                        widget.lessonTitle,
+                        style: GoogleFonts.tajawal(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
                         'شاهد الدرس ثم أكمل الاختبار.',
                         style: GoogleFonts.tajawal(
@@ -730,7 +759,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                 videoId: widget.videoId,
                 autoPlay: false,
                 subjectColor: widget.subject.color,
-                lessonTitle: 'الدرس ${widget.lessonNumber} — ${widget.unit.title}',
+                lessonTitle: 'الدرس ${widget.lessonNumber} — ${widget.lessonTitle}',
                 onFullScreenChange: _onFullScreenChanged,
               ),
 
