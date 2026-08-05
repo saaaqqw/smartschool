@@ -9,7 +9,7 @@ import '../auth/profile_editor_screen.dart';
 import '../auth/welcome_screen.dart';
 import '../study/study_plan_screen.dart';
 import '../../core/l10n/app_localizations.dart';
-import 'developer_dashboard_screen.dart';
+import 'admin/admin_dashboard_screen.dart';
 import '../reports/parent_report_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/developer_auth_service.dart';
@@ -748,7 +748,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (dialogContext.mounted) Navigator.of(dialogContext).pop();
     if (mounted) {
-      Navigator.of(context).push(DeveloperDashboardScreen.route());
+      Navigator.of(context).push(AdminDashboardScreen.route());
     }
   }
 

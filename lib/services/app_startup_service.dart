@@ -6,7 +6,6 @@ import '../core/stores/study_timer_store.dart';
 import 'firebase_sync_service.dart';
 import 'fcm_service.dart';
 import 'connectivity_service.dart';
-import 'database_cleanup_service.dart';
 
 /// ──────────────────────────────────────────────────────────────
 /// خدمة تهيئة التطبيق عند الإطلاق (App Startup Service)

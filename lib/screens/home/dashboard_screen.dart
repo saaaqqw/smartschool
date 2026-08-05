@@ -8,7 +8,6 @@ import '../../services/weekly_schedule_service.dart';
 import '../../services/firebase_sync_service.dart';
 import '../../services/connectivity_service.dart';
 import '../grades/grades_screen.dart';
-import '../settings/settings_screen.dart';
 import '../study/study_plan_screen.dart';
 import '../subjects/subjects_screen.dart';
 import '../chat/chat_screen.dart';
@@ -147,7 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 }
 
                 // Average progress across all subjects, or 0.0 if no data
-                final avgProgress = count > 0 ? (totalProgress / kCoreSubjects.length) : 0.0;
+                final avgProgress = count > 0 ? (totalProgress / kTeachableSubjects.length) : 0.0;
 
                 return CustomScrollView(
                   slivers: [

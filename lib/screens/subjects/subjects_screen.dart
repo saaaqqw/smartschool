@@ -6,6 +6,7 @@ import '../../core/stores/user_profile_store.dart';
 import '../../data/subject_curriculum.dart';
 import '../../services/firebase_sync_service.dart';
 import 'subject_units_screen.dart';
+
 import '../chat/chat_screen.dart';
 
 /// المواد الدراسية — شبكة من 6 مواد؛ الضغط يفتح شاشة الوحدات الست.

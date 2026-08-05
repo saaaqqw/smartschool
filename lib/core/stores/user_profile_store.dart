@@ -40,7 +40,7 @@ class UserProfile {
       profileImageUrl: user.profileImageUrl,
       email: user.email,
       pin: user.pin,
-      semester: user.semester,
+      semester: _normalizeSemester(user.semester),
     );
   }
 
@@ -55,7 +55,7 @@ class UserProfile {
       profileImageUrl: map['profileImageUrl'] ?? '',
       email: map['email'] ?? '',
       pin: map['pin'] ?? '',
-      semester: map['semester'] ?? 'الفصل الدراسي الأول',
+      semester: _normalizeSemester(map['semester'] ?? ''),
     );
   }
 
@@ -116,6 +116,16 @@ class UserProfile {
 final ValueNotifier<UserProfile> userProfileNotifier =
     ValueNotifier<UserProfile>(UserProfile.empty);
 
+/// يُصحّح اسم الفصل الدراسي إلى الصيغة الرسمية المعتمدة في قاعدة البيانات.
+/// مثال: "الفصل الأول" → "الفصل الدراسي الأول"
+String _normalizeSemester(String raw) {
+  final s = raw.trim();
+  if (s == 'الفصل الأول' || s == 'الفصل 1' || s == '1') return 'الفصل الدراسي الأول';
+  if (s == 'الفصل الثاني' || s == 'الفصل 2' || s == '2') return 'الفصل الدراسي الثاني';
+  if (s.isEmpty) return 'الفصل الدراسي الأول';
+  return s; // القيمة صحيحة مسبقاً
+}
+
 const String _kUid = 'profile_uid';
 const String _kFullName = 'profile_full_name';
 const String _kSchool = 'profile_school';
@@ -145,7 +155,7 @@ Future<void> loadUserProfile() async {
     profileImageUrl: p.getString(_kProfileImageUrl) ?? '',
     email: p.getString(_kEmail) ?? '',
     pin: p.getString(_kPin) ?? '',
-    semester: p.getString(_kSemester) ?? 'الفصل الدراسي الأول',
+    semester: _normalizeSemester(p.getString(_kSemester) ?? ''),
   );
 }
 

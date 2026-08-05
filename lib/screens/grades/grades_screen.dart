@@ -168,7 +168,7 @@ class _GradesScreenState extends State<GradesScreen>
       }
 
       for (final doc in query.docs) {
-        final d = doc.data() as Map<String, dynamic>;
+        final d = doc.data();
         final type = d['type'] as String? ?? '';
         if (type == 'quiz_result' || type == 'unit_exam_result') {
           final timestamp = d['createdAt'] as Timestamp?;

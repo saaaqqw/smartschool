@@ -111,7 +111,8 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                         if (e.key < widget.subject.units.length &&
                             (widget.subject.subjectId == 'social' ||
                              widget.subject.subjectId == 'quran' ||
-                             widget.subject.subjectId == 'islamic')) {
+                             widget.subject.subjectId == 'islamic' ||
+                             widget.subject.subjectId == 'english')) {
                           title = widget.subject.units[e.key].title;
                         }
                         return CurriculumUnit(
@@ -199,7 +200,8 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                             progressData[unit.title] as double?;
                         final currentProgress =
                             firestoreProgress ?? unit.progress;
-                        final isLocked = index > currentUnitIndex;
+                        final isBranchSubject = ['social', 'english', 'quran', 'islamic'].contains(widget.subject.subjectId);
+                        final isLocked = isBranchSubject ? false : index > currentUnitIndex;
 
                         return _UnitCard(
                           subject: widget.subject,
@@ -211,7 +213,7 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                               ? () {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(
+                                      content: const Text(
                                           'يجب إكمال الوحدات السابقة أولاً لتتمكن من فتح هذه الوحدة.'),
                                       behavior: SnackBarBehavior.floating,
                                       backgroundColor: scheme.error,
@@ -303,14 +305,15 @@ class _UnitCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'الوحدة ${index + 1}',
-                      style: GoogleFonts.tajawal(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: subject.color,
+                    if (!['social', 'english', 'quran', 'islamic'].contains(subject.subjectId))
+                      Text(
+                        'الوحدة ${index + 1}',
+                        style: GoogleFonts.tajawal(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: subject.color,
+                        ),
                       ),
-                    ),
                     Text(
                       unit.title,
                       style: GoogleFonts.tajawal(

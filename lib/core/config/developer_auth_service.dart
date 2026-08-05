@@ -40,8 +40,19 @@ class DeveloperAuthService {
 
     // 3. التحقق مما إذا كان حسابه مضافاً في مجموعة المشرفين (admins collection) في Firestore
     try {
+      // 3.1 فحص بالـ UID (الطريقة القديمة)
       final doc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
-      return doc.exists && doc.data() != null;
+      if (doc.exists && doc.data() != null) return true;
+
+      // 3.2 فحص بالبريد الإلكتروني (الطريقة الجديدة التي طلبها المستخدم)
+      if (email.isNotEmpty) {
+        final query = await FirebaseFirestore.instance.collection('admins')
+            .where('email', isEqualTo: email.trim().toLowerCase())
+            .get();
+        if (query.docs.isNotEmpty) return true;
+      }
+
+      return false;
     } catch (_) {
       return false;
     }

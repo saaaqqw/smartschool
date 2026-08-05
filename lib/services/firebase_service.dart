@@ -5,7 +5,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'dart:io';
 import '../data/models/user_model.dart';
-import 'firebase_sync_service.dart';
 import 'db_keys.dart';
 
 class FirebaseService {

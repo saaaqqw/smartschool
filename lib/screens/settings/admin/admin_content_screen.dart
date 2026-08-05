@@ -2,12 +2,11 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../data/subject_curriculum.dart';
-import '../../services/database_cleanup_service.dart';
-import '../../core/config/ai_config_service.dart';
-import '../../core/config/developer_auth_service.dart';
-import '../../services/firebase_sync_service.dart';
-import '../../core/stores/user_profile_store.dart';
+import '../../../data/subject_curriculum.dart';
+import '../../../services/database_cleanup_service.dart';
+import '../../../core/config/developer_auth_service.dart';
+import '../../../services/firebase_sync_service.dart';
+import '../../../core/stores/user_profile_store.dart';
 
 /// نموذج يمثل سؤالاً مضافاً إلى القائمة المؤقتة قبل رفعه لـ Firestore
 class TempQuestionItem {
@@ -25,13 +24,13 @@ class TempQuestionItem {
 /// لوحة تحكم المطور / المعلم لإدارة الدروس ومزامنتها مع Firebase
 /// تتضمن القوائم المنسدلة المنسقة، حقول رابط الفيديو والملخص،
 /// إضافة الأسئلة في قائمة مؤقتة وعرضها في ListTile، وحفظ التغييرات في Cloud Firestore.
-class DeveloperDashboardScreen extends StatefulWidget {
-  const DeveloperDashboardScreen({super.key});
+class AdminContentScreen extends StatefulWidget {
+  const AdminContentScreen({super.key});
 
   static Route<void> route() {
     return PageRouteBuilder<void>(
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const DeveloperDashboardScreen(),
+          const AdminContentScreen(),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: CurvedAnimation(
@@ -55,22 +54,14 @@ class DeveloperDashboardScreen extends StatefulWidget {
   }
 
   @override
-  State<DeveloperDashboardScreen> createState() =>
-      _DeveloperDashboardScreenState();
+  State<AdminContentScreen> createState() =>
+      _AdminContentScreenState();
 }
 
-class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
+class _AdminContentScreenState extends State<AdminContentScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  int _dashboardTab = 0; // 0: إدارة الدروس، 1: بث الإشعارات
-  final _notifTitleController = TextEditingController();
-  final _notifBodyController = TextEditingController();
-  final _notifSenderController = TextEditingController(text: 'إدارة المدرسة');
-  final _notifImageUrlController = TextEditingController();
-  final _notifActionLinkController = TextEditingController();
-  String _notifTargetGrade = 'الكل';
-  String _notifType = 'general';
-  bool _isSendingNotif = false;
+
 
   // ── 1) القوائم المنسدلة (الصف، الفصل، المادة، الوحدة والدرس) ─────────────────────
   String _selectedGrade = 'الصف السابع';
@@ -90,16 +81,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     'الفصل الدراسي الثاني',
   ];
 
-  // ── حقول التحكم بمفتاح ونموذج الذكاء الاصطناعي ────────────────────────
-  final _apiKeyController = TextEditingController();
-  final _geminiApiKeyController = TextEditingController();
-  final _aiModelController = TextEditingController();
-  bool _isSavingAiConfig = false;
 
-  // ── حقول التحكم بالمشرفين وصلاحيات السحابة ────────────────────────
-  final _adminUidController = TextEditingController();
-  final _adminNameController = TextEditingController();
-  bool _isSavingAdmin = false;
 
   // ── 2) حقول تفاصيل الدرس ورابط الفيديو والملخص واختيار الوحدة ─────────────
   final _unitTitleController = TextEditingController();
@@ -133,7 +115,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     super.initState();
     _fetchGradesFromDatabase();
     _initSubjectData();
-    _loadAiSettings();
     DatabaseCleanupService.cleanAllOnce();
   }
 
@@ -178,99 +159,10 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     } catch (_) {}
   }
 
-  Future<void> _loadAiSettings() async {
-    final key = await AiConfigService.getApiKey();
-    final geminiKey = await AiConfigService.getGeminiApiKey();
-    final model = await AiConfigService.getModelName();
-    if (mounted) {
-      setState(() {
-        _apiKeyController.text = key;
-        _geminiApiKeyController.text = geminiKey;
-        _aiModelController.text = model;
-      });
-    }
-  }
 
-  Future<void> _saveAiSettings() async {
-    final key = _apiKeyController.text.trim();
-    final geminiKey = _geminiApiKeyController.text.trim();
-    final model = _aiModelController.text.trim();
-    if (key.isEmpty || geminiKey.isEmpty || model.isEmpty) {
-      _showSnackBar('يرجى إدخال المفاتيح واسم النموذج أولاً ⚠️', isError: true);
-      return;
-    }
-    setState(() => _isSavingAiConfig = true);
-    try {
-      await AiConfigService.updateAiConfig(apiKey: key, geminiApiKey: geminiKey, modelName: model);
-      _showSnackBar('تم حفظ وتحديث إعدادات الذكاء الاصطناعي بنجاح 🤖✅');
-    } catch (e) {
-      _showSnackBar('خطأ أثناء حفظ إعدادات AI: $e ❌', isError: true);
-    } finally {
-      if (mounted) setState(() => _isSavingAiConfig = false);
-    }
-  }
-
-  Future<void> _saveNewAdmin() async {
-    final uid = _adminUidController.text.trim();
-    final name = _adminNameController.text.trim();
-    if (uid.isEmpty) {
-      _showSnackBar('يرجى إدخال معرف الحساب (UID) للمشرف أولاً', isError: true);
-      return;
-    }
-    setState(() => _isSavingAdmin = true);
-    try {
-      await FirebaseFirestore.instance.collection('admins').doc(uid).set({
-        'uid': uid,
-        'name': name.isEmpty ? 'مشرف سحابي' : name,
-        'addedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      if (!mounted) return;
-      _adminUidController.clear();
-      _adminNameController.clear();
-      _showSnackBar('تمت إضافة المشرف بنجاح وتفعيل صلاحياته في السحابة');
-    } catch (e) {
-      _showSnackBar('تعذر إضافة المشرف: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isSavingAdmin = false);
-    }
-  }
-
-  Future<void> _deleteAdmin(String uid, String name) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: Text('سحب الصلاحية السحابية', style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text('هل أنت متأكد من رغبتك في حذف المشرف "$name" ($uid) وسحب كافة صلاحياته الإدارية من السحابة؟', style: GoogleFonts.tajawal(color: const Color(0xFF94A3B8))),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('إلغاء', style: GoogleFonts.tajawal(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('حذف وسحب الصلاحية', style: GoogleFonts.tajawal(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    try {
-      await FirebaseFirestore.instance.collection('admins').doc(uid).delete();
-      if (!mounted) return;
-      _showSnackBar('تم حذف المشرف وسحب صلاحياته بنجاح');
-    } catch (e) {
-      _showSnackBar('تعذر حذف المشرف: $e', isError: true);
-    }
-  }
 
   @override
   void dispose() {
-    _apiKeyController.dispose();
-    _geminiApiKeyController.dispose();
-    _aiModelController.dispose();
-    _adminUidController.dispose();
-    _adminNameController.dispose();
     _unitTitleController.dispose();
     _lessonTitleController.dispose();
     _videoUrlController.dispose();
@@ -282,80 +174,10 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     _qOptBController.dispose();
     _qOptCController.dispose();
     _qOptDController.dispose();
-    _notifTitleController.dispose();
-    _notifBodyController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendBroadcastNotification() async {
-    final title = _notifTitleController.text.trim();
-    final body = _notifBodyController.text.trim();
-    final senderName = _notifSenderController.text.trim();
-    final imageUrl = _notifImageUrlController.text.trim();
-    final actionLink = _notifActionLinkController.text.trim();
 
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرجاء إدخال عنوان الإشعار على الأقل.')),
-      );
-      return;
-    }
-
-    setState(() => _isSendingNotif = true);
-    try {
-      final db = FirebaseFirestore.instance;
-      await db.collection('notifications').add({
-        'title': title,
-        'body': body,
-        'type': _notifType,
-        'targetGrade': _notifTargetGrade,
-        'senderName': senderName.isNotEmpty ? senderName : 'إدارة المدرسة',
-        'imageUrl': imageUrl,
-        'actionLink': actionLink,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      _notifTitleController.clear();
-      _notifBodyController.clear();
-      _notifImageUrlController.clear();
-      _notifActionLinkController.clear();
-      // Keep sender controller as is for convenience
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('تم بث الإشعار للطلاب بنجاح! 📢✅'),
-          backgroundColor: Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ أثناء إرسال الإشعار: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _isSendingNotif = false);
-    }
-  }
-
-  Future<void> _deleteBroadcastNotification(String notifId) async {
-    try {
-      await FirebaseFirestore.instance.collection('notifications').doc(notifId).delete();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم حذف الإشعار بنجاح 🗑️'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في حذف الإشعار: $e')),
-      );
-    }
-  }
 
   Future<void> _initSubjectData() async {
     try {
@@ -879,9 +701,9 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
         title: Text('حذف الدرس من السحابة', style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text('هل أنت متأكد من رغبتك في حذف الدرس رقم "$_selectedLessonNumber" وكل محتوياته وأسئلته نهائياً؟', style: GoogleFonts.tajawal(color: const Color(0xFF94A3B8))),
+        content: Text('هل أنت متأكد من رغبتك في حذف الدرس رقم "$_selectedLessonNumber" وكل محتوياته وأسئلته نهائياً؟', style: GoogleFonts.tajawal(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -946,9 +768,9 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
         title: Text('تحذير: حذف الوحدة بالكامل', style: GoogleFonts.tajawal(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-        content: Text('سيتم مسح الوحدة رقم "${_selectedUnitIndex + 1}" وجميع الدروس والأسئلة التابعة لها نهائياً من مادة "$_selectedSubject"! هل تريد الاستمرار؟', style: GoogleFonts.tajawal(color: const Color(0xFFF8FAFC))),
+        content: Text('سيتم مسح الوحدة رقم "${_selectedUnitIndex + 1}" وجميع الدروس والأسئلة التابعة لها نهائياً من مادة "$_selectedSubject"! هل تريد الاستمرار؟', style: GoogleFonts.tajawal(color: Theme.of(context).colorScheme.onSurface)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1116,8 +938,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     _qOptBController.clear();
     _qOptCController.clear();
     _qOptDController.clear();
-    _adminUidController.clear();
-    _adminNameController.clear();
     setState(() {
       _qCorrectIndex = 0;
       _tempQuestionsList.clear();
@@ -1130,7 +950,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
@@ -1155,7 +975,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
               hintText: '[\n  {\n    "questionText": "سؤال؟",\n    "options": ["A","B","C","D"],\n    "correctIndex": 0\n  }\n]',
               hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
               filled: true,
-              fillColor: const Color(0xFF0F172A),
+              fillColor: Theme.of(context).colorScheme.surface,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
@@ -1215,7 +1035,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           ),
         ),
         backgroundColor:
-            isError ? Colors.redAccent.shade700 : const Color(0xFF10B981),
+            isError ? Colors.redAccent.shade700 : Theme.of(context).colorScheme.primary,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -1225,11 +1045,11 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     final confirm = await showDialog<bool>(
       context: ctx,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
         title: Text('تنظيف قاعدة البيانات', style: GoogleFonts.tajawal(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
           'هل أنت متأكد من رغبتك في حذف البيانات التابعة للصفوف المحذوفة ودمج المواد المتكررة بسبب اختلاف صيغة الفصل (مثلاً "الفصل الأول" سيُدمج في "الفصل الدراسي الأول")؟\n(سيتم الإبقاء على الدروس بأمان)',
-          style: GoogleFonts.tajawal(color: const Color(0xFF94A3B8), height: 1.5),
+          style: GoogleFonts.tajawal(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
         ),
         actions: [
           TextButton(
@@ -1263,7 +1083,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
           content: Text('تم تنظيف $deletedCount مادة قديمة ودمج الفصول المكررة بنجاح ✅', style: GoogleFonts.tajawal()),
-          backgroundColor: const Color(0xFF10B981),
+          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
     }
@@ -1278,12 +1098,12 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            const Icon(Icons.security_rounded, color: Color(0xFF10B981)),
-            const SizedBox(width: 10),
+            Icon(Icons.security_rounded, color: Theme.of(context).colorScheme.primary),
+            SizedBox(width: 10),
             Expanded(
               child: Text(
                 'تغيير رمز دخول المطور',
@@ -1304,7 +1124,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 style: GoogleFonts.tajawal(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'الرمز الحالي',
-                  labelStyle: GoogleFonts.tajawal(color: const Color(0xFF94A3B8)),
+                  labelStyle: GoogleFonts.tajawal(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
@@ -1316,7 +1136,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 style: GoogleFonts.tajawal(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'الرمز الجديد (4 أرقام فأكثر)',
-                  labelStyle: GoogleFonts.tajawal(color: const Color(0xFF94A3B8)),
+                  labelStyle: GoogleFonts.tajawal(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
@@ -1328,7 +1148,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 style: GoogleFonts.tajawal(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'تأكيد الرمز الجديد',
-                  labelStyle: GoogleFonts.tajawal(color: const Color(0xFF94A3B8)),
+                  labelStyle: GoogleFonts.tajawal(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
@@ -1349,7 +1169,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('إلغاء', style: GoogleFonts.tajawal(color: const Color(0xFF94A3B8))),
+            child: Text('إلغاء', style: GoogleFonts.tajawal(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ),
           FilledButton(
             onPressed: () async {
@@ -1378,12 +1198,12 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('تم تحديث رمز دخول المطور بنجاح ✅', style: GoogleFonts.tajawal()),
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                   ),
                 );
               }
             },
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
             child: Text('حفظ الرمز', style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
           ),
         ],
@@ -1393,27 +1213,29 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bgColor = Color(0xFF0F172A);
-    const cardBgColor = Color(0xFF1E293B);
-    const borderColor = Color(0xFF334155);
-    const accentColor = Color(0xFF10B981); // Emerald Green
-    const textPrimary = Color(0xFFF8FAFC);
-    const textSecondary = Color(0xFF94A3B8);
+    final bgColor = Theme.of(context).colorScheme.surface;
+    final cardBgColor = Theme.of(context).colorScheme.surfaceContainer;
+    final borderColor = Theme.of(context).colorScheme.outlineVariant;
+    final accentColor = Theme.of(context).colorScheme.primary;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textSecondary = Theme.of(context).colorScheme.onSurfaceVariant;
 
     final currentUserEmail = userProfileNotifier.value.email;
     final isSuperAdmin = DeveloperAuthService.isSuperAdmin(currentUserEmail);
 
-    return Scaffold(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: cardBgColor,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: textPrimary),
+        iconTheme: IconThemeData(color: textPrimary),
         title: Row(
           children: [
-            const Icon(Icons.school_rounded, color: accentColor, size: 24),
-            const SizedBox(width: 8),
+            Icon(Icons.school_rounded, color: accentColor, size: 24),
+            SizedBox(width: 8),
             Flexible(
               child: Text(
                 'لوحة المطور / المعلم (إدارة الدروس)',
@@ -1436,31 +1258,38 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
             ),
           if (isSuperAdmin)
             IconButton(
-              icon: const Icon(Icons.admin_panel_settings_rounded, color: accentColor),
+              icon: Icon(Icons.admin_panel_settings_rounded, color: accentColor),
               tooltip: 'تغيير رمز دخول المطور',
               onPressed: () => _showChangePinDialog(context),
             ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: textSecondary),
+            icon: Icon(Icons.refresh_rounded, color: textSecondary),
             tooltip: 'تفريغ الحقول',
             onPressed: _clearFormAfterPublish,
           ),
         ],
+        bottom: TabBar(
+          labelStyle: GoogleFonts.tajawal(fontWeight: FontWeight.bold),
+          unselectedLabelStyle: GoogleFonts.tajawal(),
+          indicatorColor: accentColor,
+          labelColor: accentColor,
+          unselectedLabelColor: textSecondary,
+          tabs: const [
+            Tab(icon: Icon(Icons.menu_book_rounded), text: 'تفاصيل الدرس'),
+            Tab(icon: Icon(Icons.quiz_rounded), text: 'بنك الأسئلة'),
+          ],
+        ),
       ),
       body: Directionality(
         textDirection: TextDirection.rtl,
-        child: Column(
-          children: [
-            if (isSuperAdmin)
-              _buildDashboardTabSwitcher(cardBgColor, borderColor, accentColor, textPrimary, textSecondary),
-            Expanded(
-              child: (_dashboardTab == 1 && isSuperAdmin)
-                  ? _buildBroadcastNotificationsTab(cardBgColor, borderColor, accentColor, textPrimary, textSecondary)
-                  : Form(
-                      key: _formKey,
-                      child: ListView(
-                        padding: const EdgeInsets.all(20),
-                        children: [
+        child: Form(
+          key: _formKey,
+          child: TabBarView(
+            children: [
+              // ── Tab 1: Lesson Details ──
+              ListView(
+                padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20),
+                children: [
               // ══════════════════════════════════════════════════════════════
               // القسم الأول: قوائم منسدلة منسقة لاختيار المنهج
               // (الفصل الدراسي، الصف الدراسي، المادة، الوحدة والدرس)
@@ -1535,7 +1364,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                     color: cardBgColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: borderColor),
+                      side: BorderSide(color: borderColor),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -1773,7 +1602,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 color: cardBgColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: borderColor),
+                  side: BorderSide(color: borderColor),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -1789,7 +1618,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                         borderColor: borderColor,
                         textPrimary: textPrimary,
                         textSecondary: textSecondary,
-                        prefixIcon: const Icon(Icons.link_rounded,
+                        prefixIcon: Icon(Icons.link_rounded,
                             color: accentColor, size: 20),
                       ),
                       const SizedBox(height: 18),
@@ -1810,8 +1639,39 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 ),
               ),
 
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _showJsonImportDialog,
+                  icon: const Icon(Icons.data_object_rounded, color: Colors.blueAccent, size: 20),
+                  label: Text(
+                    'استيراد أسئلة متعددة عبر نص JSON 📥',
+                    style: GoogleFonts.tajawal(
+                      color: Colors.blueAccent,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.blueAccent, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 24),
 
+                ],
+              ),
+              // ── Tab 2: Question Bank ──
+              ListView(
+                padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20),
+                children: [
               // ══════════════════════════════════════════════════════════════
               // القسم الثالث: إضافة الأسئلة وحفظها داخل قائمة مؤقتة وعرضها في ListTile
               // ══════════════════════════════════════════════════════════════
@@ -1825,7 +1685,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 color: cardBgColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: borderColor),
+                  side: BorderSide(color: borderColor),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -1915,7 +1775,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                                   ? null
                                   : _saveOrUpdateQuestionInFirestoreImmediately,
                               icon: _isSavingQuestionToDb
-                                  ? const SizedBox(
+                                  ? SizedBox(
                                       width: 20,
                                       height: 20,
                                       child: CircularProgressIndicator(
@@ -1996,32 +1856,6 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                 ),
               ),
 
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _showJsonImportDialog,
-                  icon: const Icon(Icons.data_object_rounded, color: Colors.blueAccent, size: 20),
-                  label: Text(
-                    'استيراد أسئلة متعددة عبر نص JSON 📥',
-                    style: GoogleFonts.tajawal(
-                      color: Colors.blueAccent,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.blueAccent, width: 1.5),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
 
               // ── عرض الأسئلة المحفوظة في قاعدة البيانات للدرس الحالي في ListTile ──────────
               Padding(
@@ -2050,7 +1884,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
                   color: cardBgColor.withValues(alpha: 0.6),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: borderColor),
+                    side: BorderSide(color: borderColor),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -2197,6 +2031,22 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
               const SizedBox(height: 32),
 
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainer, // cardBgColor
+            border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)), // borderColor
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               // ══════════════════════════════════════════════════════════════
               // القسم الرابع: زر حفظ التغييرات في Firebase
               // ══════════════════════════════════════════════════════════════
@@ -2263,271 +2113,13 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
 
               const SizedBox(height: 24),
 
-              // ── قسم إعدادات الذكاء الاصطناعي ────────────────────────────────
-              if (isSuperAdmin) ...[
-                _buildSectionHeader(
-                icon: Icons.smart_toy_rounded,
-                title: 'إعدادات الذكاء الاصطناعي (AI Config & Groq Key)',
-                accentColor: const Color(0xFF10B981),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                color: cardBgColor,
-                elevation: 4,
-                shadowColor: Colors.black26,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: borderColor, width: 1.2),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'يمكنك التحكم في مفتاح Groq API واسم نموذج الـ Llama التفاعلي من السحابة مباشرة دون إعادة تحديث التطبيق للمتجر:',
-                        style: GoogleFonts.tajawal(
-                          fontSize: 13.5,
-                          color: textSecondary,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextFormField(
-                        label: 'مفتاح Groq API Key:',
-                        controller: _apiKeyController,
-                        hint: 'gsk_xxxxxxxxx...',
-                        borderColor: borderColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary,
-                        prefixIcon: const Icon(Icons.key_rounded, color: Color(0xFF10B981)),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildTextFormField(
-                        label: 'مفتاح Gemini API Key:',
-                        controller: _geminiApiKeyController,
-                        hint: 'AIzaSy...',
-                        borderColor: borderColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary,
-                        prefixIcon: const Icon(Icons.vpn_key_rounded, color: Color(0xFF10B981)),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildTextFormField(
-                        label: 'اسم نموذج الذكاء الاصطناعي:',
-                        controller: _aiModelController,
-                        hint: 'llama-3.3-70b-versatile',
-                        borderColor: borderColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary,
-                        prefixIcon: const Icon(Icons.psychology_rounded, color: Color(0xFF10B981)),
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isSavingAiConfig ? null : _saveAiSettings,
-                          icon: _isSavingAiConfig
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Icons.save_as_rounded, size: 20),
-                          label: Text(
-                            _isSavingAiConfig ? 'جاري الحفظ في السحابة...' : 'حفظ إعدادات الذكاء الاصطناعي 🤖',
-                            style: GoogleFonts.tajawal(fontSize: 14, fontWeight: FontWeight.w700),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981),
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              ],
 
-              const SizedBox(height: 24),
-              // ── قسم إدارة المشرفين والصلاحيات ────────────────────────────────
-              if (isSuperAdmin) ...[
-                _buildSectionHeader(
-                icon: Icons.admin_panel_settings_rounded,
-                title: 'إدارة المشرفين والصلاحيات السحابية (Admins)',
-                accentColor: const Color(0xFF3B82F6), // Blue Accent
-              ),
-              const SizedBox(height: 12),
-              Card(
-                color: cardBgColor,
-                elevation: 4,
-                shadowColor: Colors.black26,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: borderColor, width: 1.2),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'يمكنك إضافة معرفات الحسابات (UID) للمشرفين والمعلمين ليتمكنوا من تعديل الدروس وإدارة المحتوى من السحابة مباشرة:',
-                        style: GoogleFonts.tajawal(
-                          fontSize: 13.5,
-                          color: textSecondary,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextFormField(
-                        label: 'معرف المشرف (User UID):',
-                        controller: _adminUidController,
-                        hint: 'a1b2c3d4e5f6...',
-                        borderColor: borderColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary,
-                        prefixIcon: const Icon(Icons.badge_rounded, color: Color(0xFF3B82F6)),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildTextFormField(
-                        label: 'اسم المشرف / الوصف:',
-                        controller: _adminNameController,
-                        hint: 'أستاذ محمد - مشرف العلوم',
-                        borderColor: borderColor,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary,
-                        prefixIcon: const Icon(Icons.person_rounded, color: Color(0xFF3B82F6)),
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isSavingAdmin ? null : _saveNewAdmin,
-                          icon: _isSavingAdmin
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Icons.person_add_alt_1_rounded, size: 20),
-                          label: Text(
-                            _isSavingAdmin ? 'جاري إضافة المشرف...' : 'إضافة وتفعيل صلاحيات المشرف 🚀',
-                            style: GoogleFonts.tajawal(fontSize: 14, fontWeight: FontWeight.w700),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3B82F6),
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'قائمة المشرفين المعتمدين حالياً في قاعدة البيانات:',
-                        style: GoogleFonts.tajawal(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance.collection('admins').snapshots(),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasError) {
-                            return Text('تعذر تحميل القائمة: ${snapshot.error}', style: GoogleFonts.tajawal(color: Colors.redAccent, fontSize: 13));
-                          }
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()));
-                          }
-                          final docs = snapshot.data?.docs ?? [];
-                          if (docs.isEmpty) {
-                            return Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: bgColor,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'لا يوجد مشرفون مضافون بعد عبر هذه القائمة (يعتمد النظام حالياً على قائمة البريد الافتراضية).',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.tajawal(color: textSecondary, fontSize: 13),
-                                ),
-                              ),
-                            );
-                          }
-                          return ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: docs.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final data = docs[index].data() as Map<String, dynamic>? ?? {};
-                              final uid = docs[index].id;
-                              final name = data['name'] as String? ?? 'مشرف سحابي';
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: bgColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: borderColor, width: 1),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.verified_user_rounded, color: Color(0xFF3B82F6), size: 22),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            name,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                                          ),
-                                          Text(
-                                            'UID: $uid',
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.tajawal(color: textSecondary, fontSize: 11),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
-                                      tooltip: 'سحب الصلاحية',
-                                      constraints: const BoxConstraints(),
-                                      padding: const EdgeInsets.all(6),
-                                      onPressed: () => _deleteAdmin(uid, name),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              ],
 
               const SizedBox(height: 40),
             ],
           ),
         ),
       ),
-          ],
-        ),
       ),
     );
   }
@@ -2558,7 +2150,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
               style: GoogleFonts.tajawal(
                 fontSize: 15.5,
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFFF8FAFC),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
@@ -2604,7 +2196,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           decoration: InputDecoration(
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            fillColor: const Color(0xFF0F172A),
+            fillColor: Theme.of(context).colorScheme.surface,
             filled: true,
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -2613,7 +2205,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide:
-                  const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                  BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
             ),
           ),
           items: items.map((item) {
@@ -2671,10 +2263,10 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: GoogleFonts.tajawal(
-                color: const Color(0xFF64748B), fontSize: 13.5),
+                color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13.5),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            fillColor: const Color(0xFF0F172A),
+            fillColor: Theme.of(context).colorScheme.surface,
             filled: true,
             prefixIcon: prefixIcon,
             enabledBorder: OutlineInputBorder(
@@ -2684,7 +2276,7 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide:
-                  const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                  BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -2871,460 +2463,5 @@ class _DeveloperDashboardScreenState extends State<DeveloperDashboardScreen> {
     );
   }
 
-  Widget _buildDashboardTabSwitcher(
-    Color cardBgColor,
-    Color borderColor,
-    Color accentColor,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: cardBgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => setState(() => _dashboardTab = 0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: _dashboardTab == 0 ? accentColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.menu_book_rounded,
-                      size: 20,
-                      color: _dashboardTab == 0 ? Colors.white : textSecondary,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        '📚 إدارة المناهج والدروس',
-                        style: GoogleFonts.tajawal(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: _dashboardTab == 0 ? Colors.white : textSecondary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => setState(() => _dashboardTab = 1),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: _dashboardTab == 1 ? Colors.red.shade600 : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.campaign_rounded,
-                      size: 20,
-                      color: _dashboardTab == 1 ? Colors.white : textSecondary,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        '📢 مركز بث الإشعارات للطلاب',
-                        style: GoogleFonts.tajawal(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: _dashboardTab == 1 ? Colors.white : textSecondary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildBroadcastNotificationsTab(
-    Color cardBgColor,
-    Color borderColor,
-    Color accentColor,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cardBgColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.red.shade600.withValues(alpha: 0.4), width: 1.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade600.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.send_rounded, color: Colors.red.shade400, size: 28),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'إرسال إشعار فوري جديد للطلاب',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: textPrimary,
-                          ),
-                        ),
-                        Text(
-                          'سيصل هذا الإشعار فوراً إلى مركز إشعارات الطلاب وأيقونة التنبيه بالصفحة الرئيسية.',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 13,
-                            color: textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _notifTitleController,
-                style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
-                decoration: InputDecoration(
-                  labelText: 'عنوان الإشعار (مثال: تنبيه هام من إدارة المدرسة)',
-                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
-                  filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _notifBodyController,
-                maxLines: 4,
-                style: GoogleFonts.tajawal(color: textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'نص الإشعار التفصيلي والتعليمات...',
-                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
-                  filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _notifSenderController,
-                style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
-                decoration: InputDecoration(
-                  labelText: 'اسم المُرسل (مثال: إدارة المدرسة)',
-                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
-                  filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _notifImageUrlController,
-                style: GoogleFonts.tajawal(color: textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'رابط صورة توضيحية (اختياري)',
-                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
-                  filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _notifActionLinkController,
-                style: GoogleFonts.tajawal(color: textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'رابط تحويل (اختياري - يفتح عند الضغط)',
-                  labelStyle: GoogleFonts.tajawal(color: textSecondary),
-                  filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('الفئة المستهدفة:', style: GoogleFonts.tajawal(color: textSecondary, fontSize: 13)),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _notifTargetGrade,
-                              isExpanded: true,
-                              dropdownColor: cardBgColor,
-                              style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
-                              items: ['الكل', 'الصف السابع', 'الصف الثامن', 'الصف التاسع']
-                                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                                  .toList(),
-                              onChanged: (v) {
-                                if (v != null) setState(() => _notifTargetGrade = v);
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('أهمية ونوع الإشعار:', style: GoogleFonts.tajawal(color: textSecondary, fontSize: 13)),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _notifType,
-                              isExpanded: true,
-                              dropdownColor: cardBgColor,
-                              style: GoogleFonts.tajawal(color: textPrimary, fontWeight: FontWeight.w700),
-                              items: const [
-                                DropdownMenuItem(value: 'general', child: Text('🔵 تنبيه عام')),
-                                DropdownMenuItem(value: 'urgent', child: Text('🔴 تنبيه عاجل وهام')),
-                                DropdownMenuItem(value: 'study', child: Text('🟡 تنبيه دراسي / أكاديمي')),
-                              ],
-                              onChanged: (v) {
-                                if (v != null) setState(() => _notifType = v);
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSendingNotif ? null : _sendBroadcastNotification,
-                  icon: _isSendingNotif
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.podcasts_rounded, size: 22),
-                  label: Text(
-                    'إرسال وبث الإشعار للطلاب الآن',
-                    style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.w900),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'قائمة الإشعارات المرتسلَة السابقة (السحابية):',
-          style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
-        ),
-        const SizedBox(height: 12),
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('notifications')
-              .orderBy('createdAt', descending: true)
-              .limit(30)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Center(child: Text('خطأ في تحميل الإشعارات السابقة', style: GoogleFonts.tajawal(color: textSecondary)));
-            }
-            if (!snapshot.hasData) {
-              return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
-            }
-            final docs = snapshot.data!.docs;
-            if (docs.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(color: cardBgColor, borderRadius: BorderRadius.circular(16)),
-                child: Center(
-                  child: Text('لم يتم إرسال أي إشعارات حتى الآن', style: GoogleFonts.tajawal(color: textSecondary)),
-                ),
-              );
-            }
-
-            return ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: docs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final doc = docs[index];
-                final data = doc.data() as Map<String, dynamic>? ?? {};
-                final title = data['title'] ?? 'بدون عنوان';
-                final body = data['body'] ?? '';
-                final target = data['targetGrade'] ?? 'الكل';
-                final type = data['type'] ?? 'general';
-
-                Color badgeColor = Colors.blue.shade400;
-                if (type == 'urgent') badgeColor = Colors.red.shade400;
-                if (type == 'study') badgeColor = Colors.amber.shade400;
-
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cardBgColor,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 48,
-                        decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(6)),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    title.toString(),
-                                    style: GoogleFonts.tajawal(fontSize: 15, fontWeight: FontWeight.w800, color: textPrimary),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: badgeColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    target.toString(),
-                                    style: GoogleFonts.tajawal(fontSize: 11, fontWeight: FontWeight.bold, color: badgeColor),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (body.toString().isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                body.toString(),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.tajawal(fontSize: 13, color: textSecondary),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                        tooltip: 'حذف الإشعار من السحابة',
-                        onPressed: () => _deleteBroadcastNotification(doc.id),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        ),
-      ],
-    );
-  }
 }

@@ -52,6 +52,27 @@ class UnitDetailScreen extends StatefulWidget {
 class _UnitDetailScreenState extends State<UnitDetailScreen> {
   final _examSvc = UnitExamService();
   bool _isLoadingExam = false;
+  late Stream<List<LessonModel>> _lessonsStream;
+  // ★ كاش آخر قائمة دروس لمنع الاختفاء المفاجئ
+  List<LessonModel> _cachedLessons = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // ★ إنشاء الـ stream مرة واحدة فقط لتجنب الاختفاء عند كل إعادة بناء
+    final grade = userProfileNotifier.value.grade;
+    final cleanGrade = grade.isEmpty ? 'الصف السابع' : grade;
+    final semester = userProfileNotifier.value.semester;
+    final subjectDocId = FirebaseSyncService.getSubjectDocId(
+      widget.subject.title,
+      cleanGrade,
+      semester: semester,
+    );
+    _lessonsStream = LessonService().lessonsStream(
+      subjectId: subjectDocId,
+      unitIndex: widget.unitIndex,
+    );
+  }
 
   // ─── فتح اختبار الوحدة ───────────────────────────────────────
   Future<void> _startUnitExam({
@@ -499,6 +520,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
       cleanGrade,
       semester: semester,
     );
+    final isBranchSubject = ['social', 'english', 'quran', 'islamic'].contains(widget.subject.subjectId);
 
     return Scaffold(
       appBar: AppBar(
@@ -523,12 +545,16 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
           final completedSet = progressData['completed_lessons_set'] as List? ?? [];
 
           return StreamBuilder<List<LessonModel>>(
-            stream: LessonService().lessonsStream(
-              subjectId: subjectDocId,
-              unitIndex: widget.unitIndex,
-            ),
+            stream: _lessonsStream,
             builder: (context, lessonsSnapshot) {
-              final lessonsList = lessonsSnapshot.data ?? [];
+              // ★ استخدم الكاش إذا عاد الـ stream بقائمة فارغة مؤقتاً
+              final rawData = lessonsSnapshot.data;
+              if (rawData != null && rawData.isNotEmpty) {
+                _cachedLessons = rawData;
+              }
+              final lessonsList = _cachedLessons.isNotEmpty
+                  ? _cachedLessons
+                  : (rawData ?? []);
               final totalLessons = lessonsList.isNotEmpty ? lessonsList.length : 0;
 
               // حساب عدد الدروس المكتملة
@@ -556,7 +582,8 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
             ),
             builder: (context, examScoreSnap) {
               final examScore = examScoreSnap.data;
-              final showPlaceholder = lessonsList.isEmpty;
+              // ★ اعرض الـ placeholder فقط إذا لم تصل بيانات حتى الآن (تحميل أولي)
+              final showPlaceholder = !lessonsSnapshot.hasData && _cachedLessons.isEmpty;
 
               return ListView(
                 padding: const EdgeInsets.all(20),
@@ -598,9 +625,9 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                                   ),
                                 ),
                                 Text(
-                                  'الوحدة ${widget.unitIndex + 1}',
+                                  isBranchSubject ? widget.unit.title : 'الوحدة ${widget.unitIndex + 1}',
                                   style: GoogleFonts.tajawal(
-                                    fontSize: 18,
+                                    fontSize: isBranchSubject ? 16 : 18,
                                     fontWeight: FontWeight.w800,
                                     color: scheme.onSurface,
                                   ),
@@ -652,8 +679,10 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                           unitIndex: widget.unitIndex,
                           lessonGrade: 0.0,
                           isCompleted: false,
-                          isLocked: (widget.unitIndex > currentUnitIdx) ||
-                              (widget.unitIndex == currentUnitIdx && lessonNumber > currentLessonNum),
+                          isLocked: isBranchSubject
+                              ? (lessonNumber > currentLessonNum && !completedSet.contains('u${widget.unitIndex}_l$lessonNumber'))
+                              : ((widget.unitIndex > currentUnitIdx) ||
+                                  (widget.unitIndex == currentUnitIdx && lessonNumber > currentLessonNum)),
                         ),
                       );
                     })
@@ -687,8 +716,10 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                           unitIndex: widget.unitIndex,
                           lessonGrade: lesson.lessonGrade,
                           isCompleted: lessonIsCompleted,
-                          isLocked: (widget.unitIndex > currentUnitIdx) ||
-                              (widget.unitIndex == currentUnitIdx && lesson.lessonNumber > currentLessonNum),
+                          isLocked: isBranchSubject
+                              ? (lesson.lessonNumber > currentLessonNum && !completedSet.contains('u${widget.unitIndex}_l${lesson.lessonNumber}'))
+                              : ((widget.unitIndex > currentUnitIdx) ||
+                                  (widget.unitIndex == currentUnitIdx && lesson.lessonNumber > currentLessonNum)),
                         ),
                       );
                     }),

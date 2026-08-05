@@ -47,7 +47,6 @@ List<CurriculumUnit> _unitsForSocial() {
 List<CurriculumUnit> _unitsForQuran() {
   return const [
     CurriculumUnit(title: 'تلاوة وحفظ القرآن', icon: Icons.menu_book_rounded),
-    CurriculumUnit(title: 'التفسير',            icon: Icons.lightbulb_outline_rounded),
     CurriculumUnit(title: 'التجويد',            icon: Icons.record_voice_over_rounded),
   ];
 }
@@ -58,6 +57,13 @@ List<CurriculumUnit> _unitsForIslamic() {
     CurriculumUnit(title: 'الحديث الشريف',    icon: Icons.format_quote_rounded),
     CurriculumUnit(title: 'الفقه والعبادات',   icon: Icons.balance_rounded),
     CurriculumUnit(title: 'السيرة النبوية',   icon: Icons.mosque_rounded),
+  ];
+}
+
+List<CurriculumUnit> _unitsForEnglish() {
+  return const [
+    CurriculumUnit(title: 'كتاب الحصة (Coursebook)', icon: Icons.menu_book_rounded),
+    CurriculumUnit(title: 'كتاب الواجب (Workbook)', icon: Icons.edit_note_rounded),
   ];
 }
 
@@ -89,7 +95,7 @@ final List<SchoolSubject> kCoreSubjects = [
     title: 'الإنجليزية',
     color: const Color(0xFF1565C0),
     icon: Icons.abc_rounded,
-    units: _defaultUnits(),
+    units: _unitsForEnglish(),
   ),
   SchoolSubject(
     subjectId: 'social',
@@ -113,3 +119,8 @@ final List<SchoolSubject> kCoreSubjects = [
     units: _unitsForQuran(),
   ),
 ];
+
+/// المواد القابلة للتدريس الفعلي
+List<SchoolSubject> get kTeachableSubjects {
+  return kCoreSubjects;
+}

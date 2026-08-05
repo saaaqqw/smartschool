@@ -19,14 +19,14 @@ class CurriculumUnit {
   final double progress;
 }
 
-/// مادة دراسية أساسية مع قائمة وحداتها.
+/// مادة دراسية أساسية أو مجلد يحتوي على مواد فرعية.
 class SchoolSubject {
   const SchoolSubject({
     required this.subjectId,
     required this.title,
     required this.color,
     required this.icon,
-    required this.units,
+    this.units = const [],
   });
 
   final String subjectId;
@@ -34,4 +34,5 @@ class SchoolSubject {
   final Color color;
   final IconData icon;
   final List<CurriculumUnit> units;
+  
 }

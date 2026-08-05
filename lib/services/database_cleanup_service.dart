@@ -40,6 +40,38 @@ class DatabaseCleanupService {
     return totalDeleted;
   }
 
+  /// حذف المستندات التي تعود للصفوف غير المدعومة حالياً (فقط 7، 8، 9 هي المدعومة)
+  static Future<int> deleteUnusedGradesData() async {
+    int totalDeleted = 0;
+    final validGrades = ['الصف السابع', 'الصف الثامن', 'الصف التاسع'];
+    try {
+      final subjectsSnap = await _db.collection('subjects').get();
+      for (final doc in subjectsSnap.docs) {
+        final docId = doc.id;
+        // Check if docId contains one of the valid grades
+        bool isValid = false;
+        for (final validGrade in validGrades) {
+          if (docId.contains(validGrade)) {
+            isValid = true;
+            break;
+          }
+        }
+        
+        // If the document does not belong to a valid grade, delete it
+        if (!isValid) {
+          await doc.reference.delete();
+          totalDeleted++;
+          debugPrint('🗑️ Deleted unused grade subject: $docId');
+        }
+      }
+      debugPrint('🎉 [DatabaseCleanupService] تم تنظيف وحذف $totalDeleted مادة من الصفوف غير المستخدمة!');
+    } catch (e) {
+      debugPrint('❌ [DatabaseCleanupService] خطأ أثناء حذف مواد الصفوف القديمة: $e');
+    }
+    return totalDeleted;
+  }
+
+
   /// حذف المستندات القديمة المكررة ذات الأسماء الإنجليزية من مجموعة subjects
   /// (مثل: math, science, arabic, english, social, islamic, quran)
   /// واعتماد التسمية العربية حصرياً (`المادة - الصف`).
@@ -107,8 +139,8 @@ class DatabaseCleanupService {
     return totalDeleted;
   }
 
-  /// ترحيل المناهج (الدروس والفيديوهات والأسئلة) من المسارات القديمة (المادة - الصف) 
-  /// إلى المسارات الجديدة المعتمدة على الثالوث (المادة__الصف__الفصل).
+  /// ترحيل المناهج (الدروس والفيديوهات والأسئلة) من المسارات القديمة 
+  /// (المادة - الصف) أو (الفصل الأول) إلى المسارات الجديدة الصحيحة.
   static Future<void> migrateOldSubjectsToNewFormat() async {
     try {
       debugPrint('🔄 [DatabaseCleanupService] بدء ترحيل المناهج من النظام القديم إلى الجديد...');
@@ -116,40 +148,99 @@ class DatabaseCleanupService {
       int migratedCount = 0;
 
       for (final oldDoc in subjectsSnap.docs) {
+        bool needsMigration = false;
+        String? title;
+        String? grade;
+        String? semester;
+        
+        final data = oldDoc.data();
+        
+        // 1. صيغة الشَرطة القديمة
         if (oldDoc.id.contains(' - ')) {
-          final data = oldDoc.data();
+          needsMigration = true;
           final parts = oldDoc.id.split(' - ');
-          final title = data['title'] as String? ?? parts.first.trim();
-          final grade = data['grade'] as String? ?? parts.last.trim();
-          final units = data['units'];
-
-          if (units != null) {
-            // ترحيل البيانات إلى كلا الفصلين لضمان عدم ضياعها
-            for (final semester in ['الفصل الدراسي الأول', 'الفصل الدراسي الثاني']) {
-              final newDocId = DbKeys.subjectDoc(
-                subjectTitle: title,
-                grade: grade,
-                semester: semester,
-              );
-              
-              await _db.collection('subjects').doc(newDocId).set({
-                'subjectId': data['subjectId'] ?? title,
-                'title': title,
-                'grade': grade,
-                'semester': semester,
-                'units': units,
-                if (data.containsKey('bookUrl')) 'bookUrl': data['bookUrl'],
-                if (data.containsKey('bookTitle')) 'bookTitle': data['bookTitle'],
-                'createdAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
-            }
-            migratedCount++;
-            // اختياريا: يمكن حذف المستند القديم هنا بعد الترحيل الناجح
-            // await oldDoc.reference.delete();
+          title = data['title'] as String? ?? parts.first.trim();
+          grade = data['grade'] as String? ?? parts.last.trim();
+          semester = 'الفصل الدراسي الأول'; // افتراضي
+        } 
+        // 2. صيغة الفصل المختصرة
+        else if (oldDoc.id.endsWith('__الفصل الأول') || oldDoc.id.endsWith('__الفصل الثاني')) {
+          needsMigration = true;
+          final parts = oldDoc.id.split('__');
+          if (parts.length >= 3) {
+            title = data['title'] as String? ?? parts[0];
+            grade = data['grade'] as String? ?? parts[1];
+            semester = parts[2] == 'الفصل الأول' ? 'الفصل الدراسي الأول' : 'الفصل الدراسي الثاني';
           }
         }
+
+        if (needsMigration && title != null && grade != null && semester != null) {
+          final oldUnits = data['units'] as List<dynamic>?;
+          
+          final newDocId = DbKeys.subjectDoc(
+            subjectTitle: title,
+            grade: grade,
+            semester: semester,
+          );
+          
+          // دمج آمن: قراءة المستند الجديد أولاً لتجنب مسح الدروس الموجودة فيه
+          final newDocRef = _db.collection('subjects').doc(newDocId);
+          final newDocSnap = await newDocRef.get();
+          
+          List<dynamic> mergedUnits = [];
+          if (newDocSnap.exists && newDocSnap.data()!.containsKey('units')) {
+            mergedUnits = List.from(newDocSnap.data()!['units'] as List<dynamic>);
+          }
+          
+          // إذا كان القديم يحتوي على وحدات، نقوم بدمجها بحذر
+          if (oldUnits != null) {
+            for (int i = 0; i < oldUnits.length; i++) {
+              final oldUnit = oldUnits[i] as Map<String, dynamic>;
+              final oldLessons = oldUnit['lessons'] as List<dynamic>? ?? [];
+              
+              if (oldLessons.isNotEmpty) {
+                // إذا كانت الوحدة موجودة في الجديد
+                if (i < mergedUnits.length) {
+                  final newUnit = mergedUnits[i] as Map<String, dynamic>;
+                  final newLessons = List<dynamic>.from(newUnit['lessons'] as List<dynamic>? ?? []);
+                  
+                  // إضافة الدروس القديمة غير الموجودة في الجديد (بناءً على lessonNumber أو title)
+                  for (final oldL in oldLessons) {
+                    final exists = newLessons.any((nL) => nL['lessonNumber'] == oldL['lessonNumber'] || nL['title'] == oldL['title']);
+                    if (!exists) {
+                      newLessons.add(oldL);
+                    }
+                  }
+                  
+                  newUnit['lessons'] = newLessons;
+                  mergedUnits[i] = newUnit;
+                } else {
+                  // إذا الوحدة غير موجودة في الجديد أصلاً، أضفها بالكامل
+                  mergedUnits.add(oldUnit);
+                }
+              }
+            }
+          }
+          
+          // حفظ البيانات المدمجة بأمان
+          await newDocRef.set({
+            'subjectId': data['subjectId'] ?? title,
+            'title': title,
+            'grade': grade,
+            'semester': semester,
+            if (mergedUnits.isNotEmpty) 'units': mergedUnits,
+            if (data.containsKey('bookUrl') && (!newDocSnap.exists || !newDocSnap.data()!.containsKey('bookUrl'))) 'bookUrl': data['bookUrl'],
+            if (data.containsKey('bookTitle') && (!newDocSnap.exists || !newDocSnap.data()!.containsKey('bookTitle'))) 'bookTitle': data['bookTitle'],
+            'createdAt': newDocSnap.exists ? newDocSnap.data()!['createdAt'] : FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          
+          // حذف المستند القديم بعد الترحيل الناجح لتنظيف الازدواج
+          await oldDoc.reference.delete();
+          migratedCount++;
+          debugPrint('✅ تم دمج وحذف المستند القديم المكرر بأمان: ${oldDoc.id}');
+        }
       }
-      debugPrint('✅ [DatabaseCleanupService] تم ترحيل $migratedCount منهج بنجاح!');
+      debugPrint('✅ [DatabaseCleanupService] تم ترحيل ودمج $migratedCount منهج بنجاح!');
     } catch (e) {
       debugPrint('❌ [DatabaseCleanupService] خطأ أثناء الترحيل: $e');
     }
