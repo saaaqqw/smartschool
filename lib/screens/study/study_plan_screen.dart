@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/weekly_schedule_service.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../../data/subject_curriculum.dart';
+import '../../core/l10n/app_localizations.dart';
 
 const double _kCardRadius = 20;
 
@@ -79,7 +80,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
     final uid = userProfileNotifier.value.uid;
     if (uid.isEmpty) return;
     await _scheduleService.saveSchedule(uid, _weeklySchedule);
-    if (mounted) _toast(context, 'تم حفظ التعديلات بنجاح ✓');
+    if (mounted) _toast(context, AppLocalizations.of(context).translate('changes_saved_successfully'));
   }
 
   Future<void> _pickStartTime() async {
@@ -89,7 +90,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
         hour: _weeklySchedule.startHour,
         minute: _weeklySchedule.startMinute,
       ),
-      helpText: 'وقت بدء الدراسة',
+      helpText: AppLocalizations.of(context).translate('study_start_time'),
       builder: (ctx, child) => Directionality(
         textDirection: TextDirection.rtl,
         child: child!,
@@ -114,16 +115,17 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        final l10n = AppLocalizations.of(context);
         final scheme = Theme.of(context).colorScheme;
         final options = [
-          (30, '٣٠ دقيقة'),
-          (45, '٤٥ دقيقة'),
-          (60, 'ساعة واحدة'),
-          (90, 'ساعة ونصف'),
-          (120, 'ساعتان'),
-          (150, 'ساعتان ونصف'),
-          (180, 'ثلاث ساعات'),
-          (240, 'أربع ساعات'),
+          (30, l10n.translate('thirty_mins')),
+          (45, l10n.translate('forty_five_mins')),
+          (60, l10n.translate('one_hour')),
+          (90, l10n.translate('one_hour_half')),
+          (120, l10n.translate('two_hours')),
+          (150, l10n.translate('two_hours_half')),
+          (180, l10n.translate('three_hours')),
+          (240, l10n.translate('four_hours')),
         ];
         return SafeArea(
           child: SingleChildScrollView(
@@ -135,7 +137,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
-                    'مدة الدراسة اليومية',
+                    l10n.translate('daily_study_duration'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.tajawal(
                       fontSize: 18,
@@ -178,6 +180,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
   }
 
   Future<void> _showDaySubjectsSheet(String day) async {
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final selected = List<String>.from(_weeklySchedule.schedule[day] ?? []);
 
@@ -205,7 +208,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
-                          'مواد يوم $day',
+                          '${l10n.translate('subjects_of_day')}$day',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.tajawal(
                             fontSize: 20,
@@ -272,7 +275,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                           ),
                         ),
                         child: Text(
-                          'حفظ مواد اليوم',
+                          l10n.translate('save_day_subjects'),
                           style: GoogleFonts.tajawal(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -300,16 +303,17 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
   }
 
   String _formatDuration(int minutes) {
-    if (minutes < 60) return '$minutes دقيقة';
+    final l10n = AppLocalizations.of(context);
+    if (minutes < 60) return '$minutes ${l10n.translate('minute_word')}';
     final h = minutes ~/ 60;
     final m = minutes % 60;
     if (m == 0) {
-      if (h == 1) return 'ساعة واحدة';
-      if (h == 2) return 'ساعتان';
-      return '$h ساعات';
+      if (h == 1) return l10n.translate('one_hour');
+      if (h == 2) return l10n.translate('two_hours');
+      return '$h ${l10n.translate('hours_word')}';
     }
-    final hStr = h == 1 ? 'ساعة' : (h == 2 ? 'ساعتان' : '$h ساعات');
-    return '$hStr و$m دقيقة';
+    final hStr = h == 1 ? l10n.translate('one_hour') : (h == 2 ? l10n.translate('two_hours') : '$h ${l10n.translate('hours_word')}');
+    return '$hStr ${l10n.translate('and_word')} $m ${l10n.translate('minute_word')}';
   }
 
   Widget _buildCategoryLabel(String text, ColorScheme scheme) {
@@ -341,6 +345,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -348,7 +353,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
       return Scaffold(
         appBar: AppBar(
           title: Text(
-            'الخطة الدراسية',
+            l10n.translate('study_plan'),
             style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
           ),
         ),
@@ -370,7 +375,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
         surfaceTintColor: Colors.transparent,
         backgroundColor: scheme.surfaceContainerLowest,
         title: Text(
-          'الخطة الدراسية',
+          l10n.translate('study_plan'),
           style: GoogleFonts.tajawal(
             fontWeight: FontWeight.w800,
             fontSize: 20,
@@ -382,7 +387,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           // ── قسم الجدول الدراسي الأسبوعي ──
-          _buildCategoryLabel('الجدول الدراسي الأسبوعي', scheme),
+          _buildCategoryLabel(l10n.translate('weekly_study_schedule'), scheme),
           const SizedBox(height: 10),
           _PlanSettingsCard(
             scheme: scheme,
@@ -424,7 +429,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                         ),
                         subtitle: subjects.isEmpty
                             ? Text(
-                                'لم يتم تحديد مواد',
+                                l10n.translate('no_subjects_selected'),
                                 textAlign: TextAlign.right,
                                 style: GoogleFonts.tajawal(
                                   fontSize: 12,
@@ -474,7 +479,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
           const SizedBox(height: 24),
 
           // ── قسم إعدادات وقت الدراسة اليومية ──
-          _buildCategoryLabel('الدراسة اليومية', scheme),
+          _buildCategoryLabel(l10n.translate('daily_study'), scheme),
           const SizedBox(height: 10),
           _PlanSettingsCard(
             scheme: scheme,
@@ -497,7 +502,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                     ),
                   ),
                   title: Text(
-                    'وقت بدء الدراسة',
+                    l10n.translate('study_start_time'),
                     textAlign: TextAlign.right,
                     style: GoogleFonts.tajawal(
                       fontSize: 16,
@@ -539,7 +544,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
                     ),
                   ),
                   title: Text(
-                    'مدة الدراسة اليومية',
+                    l10n.translate('daily_study_duration'),
                     textAlign: TextAlign.right,
                     style: GoogleFonts.tajawal(
                       fontSize: 16,
@@ -573,7 +578,7 @@ class _StudyPlanScreenState extends State<StudyPlanScreen> {
             onPressed: _saveSchedule,
             icon: const Icon(Icons.save_rounded, size: 20),
             label: Text(
-              'حفظ التغييرات بالكامل',
+              l10n.translate('save_all_changes'),
               style: GoogleFonts.tajawal(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,

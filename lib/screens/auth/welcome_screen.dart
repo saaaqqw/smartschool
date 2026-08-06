@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'login_screen.dart';
+import '../../core/l10n/app_localizations.dart';
 
 /// شاشة الترحيب — نقطة الدخول قبل التسجيل.
 class WelcomeScreen extends StatefulWidget {
@@ -15,24 +16,25 @@ class WelcomeScreen extends StatefulWidget {
 class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _animationController;
   late final Animation<double> _pulseAnimation;
-  late final String _motivationalMessage;
+  late final String _motivationalMessageKey;
 
-  // قائمة بالرسائل الترحيبية والتحفيزية
+  // قائمة مفاتيح الرسائل الترحيبية والتحفيزية
   static const List<String> _quotes = [
-    'العلم نور، وطريقك نحو التميز الدراسي يبدأ بخطوة اليوم!',
-    'كل يوم هو فرصة جديدة لتتعلم شيئاً رائعاً وتتقدم خطوة نحو حلمك.',
-    'النجاح هو مجموع جهود صغيرة تتكرر يوماً بعد يوم. ابدأ رحلتك الآن!',
-    'استثمر في عقلك اليوم لتصنع مستقبلاً باهراً تفتخر به.',
-    'أنت قادر على تحقيق أهدافك، دعنا ننظم دراستك ونصل للقمة معاً!',
-    'التعليم هو السلاح الأقوى الذي يمكنك استخدامه لتغيير مستقبلك.',
+    'quote_1',
+    'quote_2',
+    'quote_3',
+    'quote_4',
+    'quote_5',
+    'quote_6',
   ];
 
   @override
   void initState() {
     super.initState();
     // اختيار رسالة عشوائية عند فتح التطبيق
+    // اختيار مفتاح عشوائي
     final random = Random();
-    _motivationalMessage = _quotes[random.nextInt(_quotes.length)];
+    _motivationalMessageKey = _quotes[random.nextInt(_quotes.length)];
 
     // إعداد حركة الوميض/النبض للنص السفلي
     _animationController = AnimationController(
@@ -154,7 +156,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
                             
                             // اسم التطبيق
                             Text(
-                              'المدرسة الذكية',
+                              AppLocalizations.of(context).translate('app_name'),
                               textAlign: TextAlign.center,
                               style: GoogleFonts.tajawal(
                                 fontSize: 34,
@@ -207,7 +209,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    _motivationalMessage,
+                                    AppLocalizations.of(context).translate(_motivationalMessageKey),
                                     textAlign: TextAlign.center,
                                     style: GoogleFonts.tajawal(
                                       fontSize: 18,
@@ -229,7 +231,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    'اضغط في أي مكان للبدء',
+                                    AppLocalizations.of(context).translate('tap_to_start'),
                                     style: GoogleFonts.tajawal(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700,

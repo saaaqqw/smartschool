@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/l10n/app_localizations.dart';
 
 import '../../core/stores/user_profile_store.dart';
 import '../../services/firebase_service.dart';
@@ -58,6 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late final TextEditingController _passwordController;
   late final TextEditingController _confirmPasswordController;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   bool _isLoading = false;
   static const double _fieldRadius = 16;
@@ -89,7 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (password != _confirmPasswordController.text.trim()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('كلمة المرور وتأكيد كلمة المرور غير متطابقين', style: GoogleFonts.tajawal()),
+          content: Text(AppLocalizations.of(context).translate('passwords_do_not_match'), style: GoogleFonts.tajawal()),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -144,19 +146,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
 
-      // العودة لشاشة تسجيل الدخول
       Navigator.of(context).pushReplacement(LoginScreen.route(showVerificationMessage: false));
 
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      String message = 'حدث خطأ أثناء إنشاء الحساب.';
+      String message = AppLocalizations.of(context).translate('register_error_generic');
       if (e.code == 'email-already-in-use') {
-        message = 'البريد الإلكتروني مسجل مسبقاً.';
-      } else if (e.code == 'invalid-email') {
-        message = 'صيغة البريد الإلكتروني غير صحيحة.';
+        message = AppLocalizations.of(context).translate('register_error_email_in_use');
       } else if (e.code == 'weak-password') {
-        message = 'كلمة المرور ضعيفة جداً.';
-      } else if (e.message != null && e.message!.isNotEmpty) {
+        message = AppLocalizations.of(context).translate('register_error_weak_password');
+      } else if (e.code == 'invalid-email') {
+        message = AppLocalizations.of(context).translate('email_invalid');
+      } else if (e.message != null) {
         message = e.message!;
       }
       ScaffoldMessenger.of(context).showSnackBar(
@@ -169,7 +170,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('فشل التسجيل: $e', style: GoogleFonts.tajawal()),
+          content: Text('${AppLocalizations.of(context).translate("register_failed")} $e', style: GoogleFonts.tajawal()),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -220,7 +221,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: scheme.surfaceContainerLowest,
       appBar: AppBar(
         title: Text(
-          'إنشاء حساب جديد',
+          AppLocalizations.of(context).translate('register_title'),
           style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
         ),
       ),
@@ -230,13 +231,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 36),
           children: [
             Text(
-              'خطوتك الأولى للتفوق! 🌟',
+              AppLocalizations.of(context).translate('register_subtitle_1'),
               textAlign: TextAlign.center,
               style: GoogleFonts.tajawal(fontSize: 24, fontWeight: FontWeight.w900, color: scheme.primary),
             ),
             const SizedBox(height: 8),
             Text(
-              'سجل بريدك الإلكتروني لإنشاء حسابك بسرعة',
+              AppLocalizations.of(context).translate('register_subtitle_2'),
               textAlign: TextAlign.center,
               style: GoogleFonts.tajawal(fontSize: 14, color: scheme.onSurfaceVariant),
             ),
@@ -246,14 +247,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
               keyboardType: TextInputType.emailAddress,
               decoration: _fieldDecoration(
                 scheme,
-                label: 'البريد الإلكتروني',
+                label: AppLocalizations.of(context).translate('email_label'),
                 prefix: const Icon(Icons.email_outlined),
               ),
               style: GoogleFonts.tajawal(fontSize: 16, fontWeight: FontWeight.bold),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'يرجى إدخال البريد الإلكتروني';
+                if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('email_empty');
                 final regex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                if (!regex.hasMatch(v.trim())) return 'يرجى إدخال بريد إلكتروني صحيح';
+                if (!regex.hasMatch(v.trim())) return AppLocalizations.of(context).translate('email_invalid');
                 return null;
               },
             ),
@@ -263,7 +264,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               obscureText: _obscurePassword,
               decoration: _fieldDecoration(
                 scheme,
-                label: 'كلمة المرور (6 أحرف أو أكثر)',
+                label: AppLocalizations.of(context).translate('password_label_hint'),
                 prefix: const Icon(Icons.lock_outline_rounded),
                 suffix: IconButton(
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -275,24 +276,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               style: GoogleFonts.tajawal(fontSize: 16),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'يرجى إدخال كلمة المرور';
-                if (v.trim().length < 6) return 'كلمة المرور يجب أن لا تقل عن 6 خانات';
+                if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('password_empty');
+                if (v.trim().length < 6) return AppLocalizations.of(context).translate('password_short');
                 return null;
               },
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _confirmPasswordController,
-              obscureText: _obscurePassword,
+              obscureText: _obscureConfirmPassword,
               decoration: _fieldDecoration(
                 scheme,
-                label: 'تأكيد كلمة المرور',
+                label: AppLocalizations.of(context).translate('confirm_password_label'),
                 prefix: const Icon(Icons.lock_reset_rounded),
+                suffix: IconButton(
+                  onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                  icon: Icon(
+                    _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ),
               ),
               style: GoogleFonts.tajawal(fontSize: 16),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'يرجى تأكيد كلمة المرور';
-                if (v.trim() != _passwordController.text.trim()) return 'كلمتا المرور غير متطابقتين';
+                if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('confirm_password_empty');
+                if (v.trim() != _passwordController.text.trim()) return AppLocalizations.of(context).translate('passwords_not_match_validator');
                 return null;
               },
             ),
@@ -307,7 +315,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_fieldRadius)),
                 ),
                 child: Text(
-                  'إنشاء الحساب',
+                  AppLocalizations.of(context).translate('create_account_btn'),
                   style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -317,7 +325,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Navigator.of(context).pushReplacement(LoginScreen.route());
                 },
                 child: Text(
-                  'لديك حساب بالفعل؟ تسجيل الدخول',
+                  AppLocalizations.of(context).translate('have_account_login'),
                   style: GoogleFonts.tajawal(
                     fontWeight: FontWeight.w600,
                     fontSize: 16,

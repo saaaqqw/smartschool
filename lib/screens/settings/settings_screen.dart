@@ -108,22 +108,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _ChevronTile(
                   icon: Icons.shield_outlined,
-                  label: 'الحماية',
+                  label: AppLocalizations.of(context).translate('security'),
                   onTap: () => _showM3InfoDialog(
                     context,
                     icon: Icons.shield_outlined,
-                    title: 'إعدادات الأمان',
-                    body:
-                        'نلتزم بحماية حسابك وبياناتك الشخصية داخل تطبيق المدرسة الذكية. '
-                        'لا تشارك بيانات الدخول مع أي شخص، ويُنصح باستخدام كلمة مرور قوية '
-                        'وتغييرها عند الشك بأي نشاط غير معتاد على حسابك.',
+                    title: AppLocalizations.of(context).translate('security_settings'),
+                    body: AppLocalizations.of(context).translate('security_desc'),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          _buildCategoryLabel('تفضيلات التطبيق', scheme),
+          _buildCategoryLabel(AppLocalizations.of(context).translate('app_preferences'), scheme),
           const SizedBox(height: 10),
           _SettingsCard(
             scheme: scheme,
@@ -146,11 +143,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(scheme),
                 _SwitchTile(
                   icon: Icons.notifications_outlined,
-                  label: 'الإشعارات',
+                  label: AppLocalizations.of(context).translate('notifications'),
                   value: _notificationsEnabled,
                   onChanged: (v) {
                     _toggleNotifications(v);
-                    _toast(context, 'تم تحديث إعدادات الإشعارات');
+                    _toast(context, AppLocalizations.of(context).translate('notifications_updated'));
                   },
                 ),
                 _divider(scheme),
@@ -164,15 +161,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   builder: (context, timerState, _) {
                     return _SwitchTile(
                       icon: Icons.timer_outlined,
-                      label: 'إظهار العداد العائم للمذاكرة (2+ ساعات)',
+                      label: AppLocalizations.of(context).translate('show_study_timer'),
                       value: !timerState.isOverlayHidden,
                       onChanged: (v) {
                         if (v) {
                           studyTimerStore.showOverlay();
-                          _toast(context, 'تم إظهار العداد العائم');
+                          _toast(context, AppLocalizations.of(context).translate('timer_shown'));
                         } else {
                           studyTimerStore.hideOverlay();
-                          _toast(context, 'تم إخفاء العداد العائم');
+                          _toast(context, AppLocalizations.of(context).translate('timer_hidden'));
                         }
                       },
                     );
@@ -181,7 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(scheme),
                 _ChevronTile(
                   icon: Icons.event_note_rounded,
-                  label: 'الخطة الدراسية',
+                  label: AppLocalizations.of(context).translate('study_plan'),
                   onTap: () {
                     Navigator.of(context).push(StudyPlanScreen.route());
                   },
@@ -189,7 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(scheme),
                 _ChevronTile(
                   icon: Icons.analytics_rounded,
-                  label: 'تقارير ولي الأمر والأداء الأكاديمي 📊',
+                  label: AppLocalizations.of(context).translate('parent_reports'),
                   onTap: () {
                     Navigator.of(context).push(ParentReportScreen.route());
                   },
@@ -210,9 +207,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _showM3InfoDialog(
                     context,
                     icon: Icons.help_outline,
-                    title: 'مركز المساعدة',
-                    body:
-                        'أهلاً بك في مركز مساعدة Smart School. يمكنك التواصل معنا عبر البريد الإلكتروني للدعم الفني.',
+                    title: AppLocalizations.of(context).translate('help_center'),
+                    body: AppLocalizations.of(context).translate('help_center_desc'),
                   ),
                 ),
                 _divider(scheme),
@@ -222,9 +218,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _showM3InfoDialog(
                     context,
                     icon: Icons.description_outlined,
-                    title: 'شروط الخدمة',
-                    body:
-                        'باستخدامك لتطبيق Smart School، فإنك توافق على سياسة الاستخدام العادل وحماية خصوصية البيانات.',
+                    title: AppLocalizations.of(context).translate('terms_of_service'),
+                    body: AppLocalizations.of(context).translate('terms_desc'),
                   ),
                 ),
                 _divider(scheme),
@@ -347,12 +342,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ValueListenableBuilder<UserProfile>(
           valueListenable: userProfileNotifier,
           builder: (context, profile, _) {
-            final gradeText = profile.grade.isNotEmpty ? profile.grade : 'الصف السابع';
+            final gradeText = profile.grade.isNotEmpty ? profile.grade : AppLocalizations.of(context).translate('grade_seventh');
             return Column(
               children: [
                 Text(
                   profile.fullName.trim().isEmpty
-                      ? 'طالب Smart School'
+                      ? AppLocalizations.of(context).translate('smart_school_student')
                       : profile.fullName,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.tajawal(
@@ -364,7 +359,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$gradeText ${profile.age > 0 ? "• (${profile.age} سنة)" : ""}',
+                  '$gradeText ${profile.age > 0 ? "• (${profile.age} ${AppLocalizations.of(context).translate('year')})" : ""}',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.tajawal(
                     fontSize: 15,
@@ -397,7 +392,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   icon: const Icon(Icons.edit_rounded, size: 16),
                   label: Text(
-                    'تعديل البيانات الشخصية',
+                    AppLocalizations.of(context).translate('edit_profile'),
                     style: GoogleFonts.tajawal(fontSize: 13.5, fontWeight: FontWeight.w700),
                   ),
                   style: OutlinedButton.styleFrom(
@@ -521,7 +516,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 child: Text(
-                  'إغلاق',
+                  AppLocalizations.of(context).translate('close'),
                   style: GoogleFonts.tajawal(
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
@@ -560,7 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
-                        'تغيير اللغة / Change Language',
+                        AppLocalizations.of(context).translate('change_language_title'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
                           fontSize: 18,
@@ -571,7 +566,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     ListTile(
                       title: Text(
-                        'العربية',
+                        AppLocalizations.of(context).translate('arabic'),
                         textAlign: TextAlign.right,
                         style: GoogleFonts.tajawal(
                           fontWeight: FontWeight.w600,
@@ -583,13 +578,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await updateLocale(const Locale('ar', 'SA'));
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (parentContext.mounted) {
-                          _toast(parentContext, 'تم اختيار العربية');
+                          _toast(parentContext, AppLocalizations.of(context).translate('arabic_selected'));
                         }
                       },
                     ),
                     ListTile(
                       title: Text(
-                        'English',
+                        AppLocalizations.of(context).translate('english'),
                         textAlign: TextAlign.right,
                         style: GoogleFonts.tajawal(
                           fontWeight: FontWeight.w600,
@@ -601,7 +596,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await updateLocale(const Locale('en', 'US'));
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (parentContext.mounted) {
-                          _toast(parentContext, 'English selected');
+                          _toast(parentContext, AppLocalizations.of(context).translate('english_selected'));
                         }
                       },
                     ),
@@ -638,7 +633,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'حماية شاشة المطور',
+                AppLocalizations.of(context).translate('dev_screen_protection'),
                 style: GoogleFonts.tajawal(fontWeight: FontWeight.bold, fontSize: 18),
               ),
             ),
@@ -650,7 +645,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'هذه المنطقة مخصصة لإدارة المواد والأسئلة. يرجى إدخال رمز الأمان للمتابعة:',
+                AppLocalizations.of(context).translate('dev_screen_desc'),
                 style: GoogleFonts.tajawal(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 16),
@@ -663,7 +658,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     keyboardType: TextInputType.number,
                     autofocus: true,
                     decoration: InputDecoration(
-                      labelText: 'رمز أمان المطور (PIN)',
+                      labelText: AppLocalizations.of(context).translate('dev_pin'),
                       labelStyle: GoogleFonts.tajawal(),
                       prefixIcon: const Icon(Icons.lock_rounded),
                       suffixIcon: IconButton(
@@ -709,12 +704,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('إلغاء', style: GoogleFonts.tajawal(fontWeight: FontWeight.w600)),
+            child: Text(AppLocalizations.of(ctx).translate('cancel'), style: GoogleFonts.tajawal(fontWeight: FontWeight.w600)),
           ),
           FilledButton.icon(
             onPressed: () => _verifyAndEnterDeveloper(ctx, pinController.text, errorNotifier),
             icon: const Icon(Icons.login_rounded, size: 18),
-            label: Text('دخول', style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
+            label: Text(AppLocalizations.of(ctx).translate('login'), style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
             style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
           ),
         ],
@@ -724,12 +719,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _verifyAndEnterDeveloper(BuildContext dialogContext, String pinInput, ValueNotifier<String> errorNotifier) async {
     if (pinInput.trim().isEmpty) {
-      errorNotifier.value = 'يرجى إدخال رمز الأمان';
+      errorNotifier.value = AppLocalizations.of(dialogContext).translate('enter_pin');
       return;
     }
     final isValidPin = await DeveloperAuthService.verifyPin(pinInput);
+    if (!dialogContext.mounted) return;
     if (!isValidPin) {
-      errorNotifier.value = 'رمز الدخول غير صحيح، حاول مجدداً';
+      errorNotifier.value = AppLocalizations.of(dialogContext).translate('incorrect_pin');
       return;
     }
 
@@ -739,10 +735,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       profile.uid,
       profile.email,
     );
+    if (!dialogContext.mounted) return;
 
     if (!isAuthorizedAdmin) {
-      errorNotifier.value =
-          'عذراً، حسابك الحالي ليس بصلاحية (مشرف). لا يمكنك الدخول لشاشة المطور حتى وإن كان الرمز صحيحاً.';
+      errorNotifier.value = AppLocalizations.of(dialogContext).translate('not_admin');
       return;
     }
 
@@ -762,13 +758,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: GoogleFonts.tajawal(fontWeight: FontWeight.w800),
         ),
         content: Text(
-          'هل تريد المغادرة؟',
+          AppLocalizations.of(context).translate('want_to_leave'),
           style: GoogleFonts.tajawal(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('إلغاء', style: GoogleFonts.tajawal()),
+            child: Text(AppLocalizations.of(context).translate('cancel'), style: GoogleFonts.tajawal()),
           ),
           FilledButton(
             onPressed: () async {
@@ -781,7 +777,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
             },
-            child: Text('تأكيد', style: GoogleFonts.tajawal()),
+            child: Text(AppLocalizations.of(context).translate('confirm'), style: GoogleFonts.tajawal()),
           ),
         ],
       ),

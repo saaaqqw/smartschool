@@ -9,6 +9,7 @@ import '../../data/models/lesson_model.dart';
 import '../../services/weekly_schedule_service.dart';
 import '../../services/ai_recommendation_service.dart';
 import '../subjects/lesson_detail_screen.dart';
+import '../../core/l10n/app_localizations.dart';
 
 /// واجهة الخطة (Plan Screen)
 /// تعرض مهام اليوم مع دعم:
@@ -21,6 +22,7 @@ class PlanScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final uid = userProfileNotifier.value.uid;
@@ -33,7 +35,7 @@ class PlanScreen extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
         backgroundColor: scheme.surfaceContainerLowest,
         title: Text(
-          'الخطة والمهام اليومية',
+          l10n.translate('daily_plan_tasks'),
           style: GoogleFonts.tajawal(
             fontWeight: FontWeight.w800,
             fontSize: 20,
@@ -43,7 +45,7 @@ class PlanScreen extends StatelessWidget {
         centerTitle: true,
       ),
       body: uid.isEmpty
-          ? const Center(child: Text('يرجى تسجيل الدخول أولاً.'))
+          ? Center(child: Text(l10n.translate('please_login_first')))
           : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               child: Column(
@@ -87,6 +89,7 @@ class _DayTasksSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return StreamBuilder<WeeklySchedule>(
       stream: scheduleService.scheduleStream(uid),
       builder: (context, wsSnap) {
@@ -119,7 +122,7 @@ class _DayTasksSection extends StatelessWidget {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          'مهام اليوم — $todayKey',
+                          '${l10n.translate('todays_tasks')}$todayKey',
                           style: GoogleFonts.tajawal(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
@@ -195,7 +198,7 @@ class _DayTasksSection extends StatelessWidget {
                               color: scheme.primary,
                             ),
                             label: Text(
-                              'إعادة تعيين خطة اليوم (${cancelledSet.length} ملغاة)',
+                              '${l10n.translate('reset_today_plan')} (${cancelledSet.length})',
                               style: GoogleFonts.tajawal(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -254,11 +257,12 @@ class _SubjectTaskTile extends StatelessWidget {
     final schoolSubject = _findSubject();
     if (schoolSubject == null) {
       // إن لم يُوجد المادة، نُشغّل المؤقت فقط وننبّه
+      final l10n = AppLocalizations.of(context);
       studyTimerStore.start();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'لا توجد دروس مرتبطة بـ $subject في التطبيق حالياً.',
+            '${l10n.translate('no_lessons_associated_with')}$subject${l10n.translate('in_app_currently')}',
             style: GoogleFonts.tajawal(),
           ),
           behavior: SnackBarBehavior.floating,
@@ -336,7 +340,7 @@ class _SubjectTaskTile extends StatelessWidget {
         subject: schoolSubject,
         unit: currentUnit,
         lessonNumber: lesson?.lessonNumber ?? currentLessonNumber,
-        lessonTitle: lesson?.title ?? 'الدرس $currentLessonNumber',
+        lessonTitle: lesson?.title ?? '${AppLocalizations.of(context).translate('lesson_prefix')} $currentLessonNumber',
         videoId: lesson?.videoUrl ?? '',
         subjectDocId: subjectDocId,
         unitIndex: unitIndex,
@@ -347,6 +351,7 @@ class _SubjectTaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final schoolSubject = _findSubject();
     final subjectColor = schoolSubject?.color ?? scheme.primary;
     final bg = done ? scheme.tertiaryContainer : scheme.surfaceContainerLow;
@@ -408,7 +413,7 @@ class _SubjectTaskTile extends StatelessWidget {
                       ),
                       if (!done)
                         Text(
-                          'اضغط للبدء بالدرس الحالي ◀',
+                          l10n.translate('tap_to_start_current_lesson'),
                           style: GoogleFonts.tajawal(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
@@ -427,8 +432,8 @@ class _SubjectTaskTile extends StatelessWidget {
                       color: scheme.error.withValues(alpha: 0.7),
                       size: 22,
                     ),
-                    tooltip: 'إلغاء من خطة اليوم',
-                    onPressed: () => _confirmCancel(context),
+                    tooltip: l10n.translate('cancel_subject_today'),
+                    onPressed: () => _confirmCancel(context, l10n),
                   )
                 else
                   Icon(
@@ -446,25 +451,25 @@ class _SubjectTaskTile extends StatelessWidget {
   }
 
   /// حوار التأكيد قبل الإلغاء
-  void _confirmCancel(BuildContext context) {
+  void _confirmCancel(BuildContext context, AppLocalizations l10n) {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'إلغاء المادة من اليوم',
+          l10n.translate('cancel_subject_today'),
           style: GoogleFonts.tajawal(fontWeight: FontWeight.w800),
         ),
         content: Text(
-          'هل تريد إلغاء "$subject" من خطة اليوم؟\n(يمكن استعادتها لاحقاً)',
+          '${l10n.translate('confirm_cancel_subject_1')}$subject${l10n.translate('confirm_cancel_subject_2')}',
           style: GoogleFonts.tajawal(fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'لا',
+              l10n.translate('no'),
               style: GoogleFonts.tajawal(
                 fontWeight: FontWeight.w700,
                 color: scheme.primary,
@@ -483,7 +488,7 @@ class _SubjectTaskTile extends StatelessWidget {
               onCancel();
             },
             child: Text(
-              'نعم، إلغاء',
+              l10n.translate('yes_cancel'),
               style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
             ),
           ),
@@ -503,6 +508,7 @@ class _EmptyDayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
@@ -523,7 +529,7 @@ class _EmptyDayCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'لا توجد مواد دراسية مجدولة لهذا اليوم',
+            l10n.translate('no_scheduled_subjects_today'),
             style: GoogleFonts.tajawal(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -532,7 +538,7 @@ class _EmptyDayCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'يمكنك إضافة وتعديل جدولك الدراسي الأسبوعي من صفحة الإعدادات أو زر الخطة الدراسية.',
+            l10n.translate('can_modify_schedule_desc'),
             textAlign: TextAlign.center,
             style: GoogleFonts.tajawal(
               fontSize: 12.5,
@@ -560,6 +566,7 @@ class _AllCancelledCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
@@ -580,7 +587,7 @@ class _AllCancelledCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'تم إلغاء جميع مواد اليوم',
+            l10n.translate('all_today_subjects_cancelled'),
             style: GoogleFonts.tajawal(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -592,7 +599,7 @@ class _AllCancelledCard extends StatelessWidget {
             onPressed: onReset,
             icon: const Icon(Icons.refresh_rounded),
             label: Text(
-              'إعادة تعيين خطة اليوم',
+              l10n.translate('reset_today_plan'),
               style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
             ),
             style: FilledButton.styleFrom(
@@ -781,9 +788,10 @@ class _AiScheduleImprovementSectionState extends State<_AiScheduleImprovementSec
       studyTimerStore.start();
 
       if (foundWeakLesson) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('مراجعة سريعة لأضعف درس لديك في ${schoolSubject.title} 🚀', style: GoogleFonts.tajawal()),
+            content: Text('${l10n.translate('quick_review_weakest_lesson')}${schoolSubject.title} 🚀', style: GoogleFonts.tajawal()),
             backgroundColor: widget.scheme.primary,
             behavior: SnackBarBehavior.floating,
           ),
@@ -795,7 +803,7 @@ class _AiScheduleImprovementSectionState extends State<_AiScheduleImprovementSec
           subject: schoolSubject,
           unit: currentUnit,
           lessonNumber: lesson?.lessonNumber ?? currentLessonNumber,
-          lessonTitle: lesson?.title ?? 'الدرس $currentLessonNumber',
+          lessonTitle: lesson?.title ?? '${AppLocalizations.of(context).translate('lesson_prefix')} $currentLessonNumber',
           videoId: lesson?.videoUrl ?? '',
           subjectDocId: subjectDocId,
           unitIndex: unitIndex,

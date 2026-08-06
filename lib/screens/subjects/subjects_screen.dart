@@ -8,6 +8,7 @@ import '../../services/firebase_sync_service.dart';
 import 'subject_units_screen.dart';
 
 import '../chat/chat_screen.dart';
+import '../../core/l10n/app_localizations.dart';
 
 /// المواد الدراسية — شبكة من 6 مواد؛ الضغط يفتح شاشة الوحدات الست.
 class SubjectsScreen extends StatelessWidget {
@@ -65,7 +66,7 @@ class SubjectsScreen extends StatelessWidget {
             pinned: true,
             backgroundColor: scheme.surfaceContainerLowest,
             title: Text(
-              'المواد الدراسية',
+              AppLocalizations.of(context).translate('subjects_title'),
               style: GoogleFonts.tajawal(
                 fontWeight: FontWeight.w800,
                 fontSize: 22,
@@ -99,12 +100,12 @@ class SubjectsScreen extends StatelessWidget {
                     child: Row(
                       children: [
                         _SemesterTabButton(
-                          title: 'الفصل الدراسي الأول',
+                          title: AppLocalizations.of(context).translate('semester_one'),
                           isSelected: currentSemester == 'الفصل الدراسي الأول',
                           onTap: () => updateSelectedSemester('الفصل الدراسي الأول'),
                         ),
                         _SemesterTabButton(
-                          title: 'الفصل الدراسي الثاني',
+                          title: AppLocalizations.of(context).translate('semester_two'),
                           isSelected: currentSemester == 'الفصل الدراسي الثاني',
                           onTap: () => updateSelectedSemester('الفصل الدراسي الثاني'),
                         ),
@@ -287,7 +288,7 @@ class _SubjectCardState extends State<_SubjectCard> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              '$completedLessons درس مكتمل',
+                              '$completedLessons ${AppLocalizations.of(context).translate("lessons_completed")}',
                               style: GoogleFonts.tajawal(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w600,
@@ -422,7 +423,7 @@ class _SubjectSearchSheetState extends State<_SubjectSearchSheet> {
                   onChanged: _onSearch,
                   textDirection: TextDirection.rtl,
                   decoration: InputDecoration(
-                    hintText: 'ابحث عن مادة دراسية...',
+                    hintText: AppLocalizations.of(context).translate('search_subject_hint'),
                     hintStyle: GoogleFonts.tajawal(color: scheme.onSurfaceVariant),
                     prefixIcon: const Icon(Icons.search_rounded),
                     suffixIcon: _controller.text.isNotEmpty
@@ -447,7 +448,7 @@ class _SubjectSearchSheetState extends State<_SubjectSearchSheet> {
                 child: _filtered.isEmpty
                     ? Center(
                         child: Text(
-                          'لا توجد مادة بهذا الاسم',
+                          AppLocalizations.of(context).translate('no_subject_found'),
                           style: GoogleFonts.tajawal(color: scheme.onSurfaceVariant, fontSize: 15),
                         ),
                       )

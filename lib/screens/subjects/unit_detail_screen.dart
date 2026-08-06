@@ -11,6 +11,7 @@ import '../../data/subject_curriculum.dart';
 import '../chat/chat_screen.dart';
 import 'lesson_detail_screen.dart';
 import 'unit_exam_screen.dart';
+import '../../core/l10n/app_localizations.dart';
 
 class UnitDetailScreen extends StatefulWidget {
   const UnitDetailScreen({
@@ -96,7 +97,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'لا توجد أسئلة متاحة لاختبار هذه الوحدة بعد.',
+              AppLocalizations.of(context).translate('no_exam_questions'),
               style: GoogleFonts.tajawal(),
             ),
             behavior: SnackBarBehavior.floating,
@@ -154,7 +155,9 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
             ? () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('أكمل الدرس السابق أولاً لتتمكن من الدخول.'),
+                    content: Text(
+                      AppLocalizations.of(context).translate('lesson_locked_threshold'),
+                    ),
                     behavior: SnackBarBehavior.floating,
                     backgroundColor: scheme.error,
                   ),
@@ -226,10 +229,10 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                       children: [
                         Text(
                           isLocked
-                              ? 'الدرس مقفل'
+                              ? AppLocalizations.of(context).translate('lesson_locked_subtitle')
                               : isCompleted
-                                  ? 'مكتمل ✓'
-                                  : 'شاهد الدرس + أكمل الاختبار',
+                                  ? AppLocalizations.of(context).translate('lesson_completed')
+                                  : AppLocalizations.of(context).translate('lesson_watch_and_test'),
                           style: GoogleFonts.tajawal(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
@@ -251,7 +254,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'الدرجة: $pctScore%',
+                              '${AppLocalizations.of(context).translate("score")}: $pctScore%',
                               style: GoogleFonts.tajawal(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w800,
@@ -268,7 +271,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                tooltip: isLocked ? 'الدرس مقفل' : 'فتح صفحة الدرس',
+                tooltip: isLocked ? AppLocalizations.of(context).translate('lesson_locked_tooltip') : AppLocalizations.of(context).translate('open_lesson_tooltip'),
                 icon: Icon(
                   isLocked ? Icons.lock_outline_rounded : Icons.play_circle_outline_rounded,
                   size: 26,
@@ -284,7 +287,9 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                     ? () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: const Text('أكمل الدرس السابق أولاً لتتمكن من الدخول.'),
+                            content: Text(
+                              AppLocalizations.of(context).translate('lesson_locked_threshold'),
+                            ),
                             behavior: SnackBarBehavior.floating,
                             backgroundColor: scheme.error,
                           ),
@@ -385,7 +390,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'اختبار الوحدة الشامل',
+                        AppLocalizations.of(context).translate('unit_exam_comprehensive'),
                         style: GoogleFonts.tajawal(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -394,10 +399,10 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                       ),
                       Text(
                         examPassed
-                            ? 'اجتزت الاختبار بنجاح! 🎉'
+                            ? AppLocalizations.of(context).translate('exam_passed_subtitle')
                             : allLessonsCompleted
-                                ? 'جاهز للبدء — 5 أسئلة من كل درس'
-                                : 'أكمل جميع الدروس أولاً لفتح الاختبار',
+                                ? AppLocalizations.of(context).translate('exam_ready_subtitle')
+                                : AppLocalizations.of(context).translate('exam_locked_subtitle'),
                         style: GoogleFonts.tajawal(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
@@ -449,8 +454,8 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
               const SizedBox(height: 6),
               Text(
                 examPassed
-                    ? 'الحد الأدنى للنجاح 60٪ ✓'
-                    : 'الحد الأدنى للنجاح 60٪ — لم تصل بعد',
+                    ? AppLocalizations.of(context).translate('pass_min_60_passed')
+                    : AppLocalizations.of(context).translate('pass_min_60_failed'),
                 style: GoogleFonts.tajawal(
                   fontSize: 11,
                   color: examPassed ? const Color(0xFF10B981) : scheme.error,
@@ -485,12 +490,12 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                       ),
                 label: Text(
                   _isLoadingExam
-                      ? 'جاري التحميل...'
+                      ? AppLocalizations.of(context).translate('loading')
                       : examPassed
-                          ? 'أعد الاختبار'
+                          ? AppLocalizations.of(context).translate('retake_exam')
                           : allLessonsCompleted
-                              ? 'ابدأ اختبار الوحدة'
-                              : 'مقفل — أكمل الدروس أولاً',
+                              ? AppLocalizations.of(context).translate('start_unit_exam')
+                              : AppLocalizations.of(context).translate('locked_complete_lessons_first'),
                   style: GoogleFonts.tajawal(
                       fontSize: 15, fontWeight: FontWeight.w700),
                 ),
@@ -539,11 +544,6 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
               )
             : const Stream.empty(),
         builder: (context, progressSnapshot) {
-          final progressData = progressSnapshot.data?.data() as Map<String, dynamic>? ?? {};
-          final currentUnitIdx = progressData['currentUnitIndex'] as int? ?? 0;
-          final currentLessonNum = progressData['currentLessonNumber'] as int? ?? 1;
-          final completedSet = progressData['completed_lessons_set'] as List? ?? [];
-
           return StreamBuilder<List<LessonModel>>(
             stream: _lessonsStream,
             builder: (context, lessonsSnapshot) {
@@ -557,19 +557,23 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                   : (rawData ?? []);
               final totalLessons = lessonsList.isNotEmpty ? lessonsList.length : 0;
 
-              // حساب عدد الدروس المكتملة
+              // ★ حد النجاح الصارم لفتح الدرس التالي
+              const double kPassThreshold = 0.70; // 70%
+
+              // ── دالة مساعدة: هل الدرس مقفول بناءً على درجة الدرس السابق؟
+              bool isLessonLockedByGrade(int lessonIndex) {
+                if (lessonIndex == 0) return false; // الدرس الأول مفتوح دائماً
+                final prevLesson = lessonsList[lessonIndex - 1];
+                // lessonGrade مخزّنة كـ 0.0–1.0
+                return prevLesson.lessonGrade < kPassThreshold;
+              }
+
+              // حساب عدد الدروس المكتملة (تجاوز 70%)
               int completedCount = 0;
               for (final l in lessonsList) {
-                bool lessonIsCompleted = false;
-                if (l.lessonGrade >= 0.5) {
-                  lessonIsCompleted = true;
-                } else if (completedSet.contains('u${widget.unitIndex}_l${l.lessonNumber}')) {
-                  lessonIsCompleted = true;
-                } else if (currentUnitIdx > widget.unitIndex ||
-                    (currentUnitIdx == widget.unitIndex && currentLessonNum > l.lessonNumber)) {
-                  lessonIsCompleted = true;
-                }
-                if (lessonIsCompleted) completedCount++;
+                // الدرس مكتمل فقط إذا تجاوز الطالب 70%
+                final pct = l.lessonGrade > 1.0 ? l.lessonGrade / 100.0 : l.lessonGrade;
+                if (pct >= kPassThreshold) completedCount++;
               }
 
               final allCompleted =
@@ -625,7 +629,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                                   ),
                                 ),
                                 Text(
-                                  isBranchSubject ? widget.unit.title : 'الوحدة ${widget.unitIndex + 1}',
+                                  isBranchSubject ? widget.unit.title : '${AppLocalizations.of(context).translate("unit_prefix")} ${widget.unitIndex + 1}',
                                   style: GoogleFonts.tajawal(
                                     fontSize: isBranchSubject ? 16 : 18,
                                     fontWeight: FontWeight.w800,
@@ -654,8 +658,8 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                   // ── قائمة الدروس ──────────────────────────────────
                   Text(
                     showPlaceholder
-                        ? 'قائمة الدروس (10) لهذه الوحدة:'
-                        : 'قائمة الدروس لهذه الوحدة (${lessonsList.length}):',
+                        ? AppLocalizations.of(context).translate('lessons_list_placeholder')
+                        : '${AppLocalizations.of(context).translate("lessons_list")} (${lessonsList.length}):',
                     style: GoogleFonts.tajawal(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -673,32 +677,29 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                           context: context,
                           scheme: scheme,
                           lessonNumber: lessonNumber,
-                          lessonTitle: 'الدرس $lessonNumber',
+                          lessonTitle: '${AppLocalizations.of(context).translate("lesson_prefix")} $lessonNumber',
                           videoId: 'dQw4w9WgXcQ',
                           subjectDocId: subjectDocId,
                           unitIndex: widget.unitIndex,
                           lessonGrade: 0.0,
                           isCompleted: false,
-                          isLocked: isBranchSubject
-                              ? (lessonNumber > currentLessonNum && !completedSet.contains('u${widget.unitIndex}_l$lessonNumber'))
-                              : ((widget.unitIndex > currentUnitIdx) ||
-                                  (widget.unitIndex == currentUnitIdx && lessonNumber > currentLessonNum)),
+                          // ★ Placeholder: الدرس الأول مفتوح، البقية مقفولة
+                          isLocked: lessonNumber > 1,
                         ),
                       );
                     })
                   else
                     ...List.generate(lessonsList.length, (i) {
                       final lesson = lessonsList[i];
-                      
-                      bool lessonIsCompleted = false;
-                      if (lesson.lessonGrade >= 0.5) {
-                        lessonIsCompleted = true;
-                      } else if (completedSet.contains('u${widget.unitIndex}_l${lesson.lessonNumber}')) {
-                        lessonIsCompleted = true;
-                      } else if (currentUnitIdx > widget.unitIndex ||
-                          (currentUnitIdx == widget.unitIndex && currentLessonNum > lesson.lessonNumber)) {
-                        lessonIsCompleted = true;
-                      }
+
+                      // ★ النظام الصارم: الدرس مكتمل فقط إذا تجاوز 70%
+                      final pct = lesson.lessonGrade > 1.0
+                          ? lesson.lessonGrade / 100.0
+                          : lesson.lessonGrade;
+                      final lessonIsCompleted = pct >= kPassThreshold;
+
+                      // ★ النظام الصارم: مقفول إذا درجة الدرس السابق < 70%
+                      final locked = isLessonLockedByGrade(i);
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -708,7 +709,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                           lessonNumber: lesson.lessonNumber,
                           lessonTitle: lesson.title.isNotEmpty
                               ? lesson.title
-                              : 'الدرس ${lesson.lessonNumber}',
+                              : '${AppLocalizations.of(context).translate("lesson_prefix")} ${lesson.lessonNumber}',
                           videoId: lesson.videoUrl.isEmpty
                               ? 'dQw4w9WgXcQ'
                               : lesson.videoUrl,
@@ -716,10 +717,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
                           unitIndex: widget.unitIndex,
                           lessonGrade: lesson.lessonGrade,
                           isCompleted: lessonIsCompleted,
-                          isLocked: isBranchSubject
-                              ? (lesson.lessonNumber > currentLessonNum && !completedSet.contains('u${widget.unitIndex}_l${lesson.lessonNumber}'))
-                              : ((widget.unitIndex > currentUnitIdx) ||
-                                  (widget.unitIndex == currentUnitIdx && lesson.lessonNumber > currentLessonNum)),
+                          isLocked: locked,
                         ),
                       );
                     }),
@@ -792,7 +790,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'الشرط الأول — إكمال الدروس',
+                AppLocalizations.of(context).translate('condition_one_complete_lessons'),
                 style: GoogleFonts.tajawal(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -823,8 +821,8 @@ class _UnitDetailScreenState extends State<UnitDetailScreen> {
           const SizedBox(height: 6),
           Text(
             allCompleted
-                ? '✅ أكملت جميع دروس الوحدة — يمكنك الآن بدء اختبار الوحدة'
-                : 'أكمل ${totalLessons - completedCount} درس متبقية لفتح اختبار الوحدة',
+                ? AppLocalizations.of(context).translate('all_lessons_completed_msg')
+                : AppLocalizations.of(context).translate('complete_lesson_70_msg'),
             style: GoogleFonts.tajawal(
               fontSize: 12,
               color: allCompleted ? const Color(0xFF10B981) : scheme.onSurfaceVariant,

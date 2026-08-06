@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../../services/badges_service.dart';
 import '../../services/firebase_sync_service.dart';
+import '../../core/l10n/app_localizations.dart';
 
 /// واجهة لوحة ولي الأمر وتقارير الأداء الشاملة (Parent Performance Report Screen)
 /// تعرض الملخص الأكاديمي للطالب، ساعات الدراسة، الشارات المكتسبة، وإمكانية نسخ التقرير أو مشاركته.
@@ -127,36 +128,37 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
   }
 
   void _copyReportToClipboard() {
+    final l10n = AppLocalizations.of(context);
     final profile = userProfileNotifier.value;
     final buffer = StringBuffer();
-    buffer.writeln('📋 التقرير الأكاديمي الشامل - المدرسة الذكية');
+    buffer.writeln(l10n.translate('clipboard_report_title'));
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('👤 الطالب: ${profile.fullName}');
-    buffer.writeln('🏫 المدرسة: ${profile.school} | ${profile.grade}');
-    buffer.writeln('📊 المعدل العام الأكاديمي: ${_generalAverage.toStringAsFixed(1)}%');
-    buffer.writeln('✅ إجمالي الدروس المنجزة: $_totalCompletedLessons درس');
-    buffer.writeln('🏆 الشارات المكتسبة: ${_badges.where((b) => b.isUnlocked).length} من ${_badges.length}');
+    buffer.writeln('${l10n.translate('clipboard_student')}${profile.fullName}');
+    buffer.writeln('${l10n.translate('clipboard_school')}${profile.school} | ${profile.grade}');
+    buffer.writeln('${l10n.translate('clipboard_gpa')}${_generalAverage.toStringAsFixed(1)}%');
+    buffer.writeln('${l10n.translate('clipboard_completed_lessons')}$_totalCompletedLessons ${l10n.translate('lesson_word')}');
+    buffer.writeln('${l10n.translate('clipboard_earned_badges')}${_badges.where((b) => b.isUnlocked).length} ${l10n.translate('of_word')} ${_badges.length}');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('📚 معدلات المواد الدرجة الحالية:');
+    buffer.writeln(l10n.translate('clipboard_current_grades'));
     if (_subjectScores.isEmpty) {
-      buffer.writeln('   • لا توجد درجات مسجلة بعد.');
+      buffer.writeln(l10n.translate('clipboard_no_grades'));
     } else {
       _subjectScores.forEach((subject, score) {
         buffer.writeln('   • $subject: ${score.toStringAsFixed(1)}%');
       });
     }
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('⏰ نشاط الدراسة الأسبوعي:');
+    buffer.writeln(l10n.translate('clipboard_weekly_activity'));
     int totalStudyMinutes = _studySessions.fold(0, (accumulated, s) => accumulated + ((s['totalMinutes'] as num?)?.toInt() ?? 0));
-    buffer.writeln('   • إجمالي وقت الدراسة: $totalStudyMinutes دقيقة في آخر 7 أيام');
+    buffer.writeln('${l10n.translate('clipboard_total_study_time')}$totalStudyMinutes${l10n.translate('clipboard_mins_last_7_days')}');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('تاريخ إصدار التقرير: ${DateTime.now().toString().split('.').first}');
+    buffer.writeln('${l10n.translate('clipboard_report_date')}${DateTime.now().toString().split('.').first}');
 
     Clipboard.setData(ClipboardData(text: buffer.toString()));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'تم نسخ ملخص تقرير الطالب إلى الحافظة بنجاح 📋✅',
+          l10n.translate('report_copied_success'),
           style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
         ),
         backgroundColor: const Color(0xFF1B6B93),
@@ -167,6 +169,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final profile = userProfileNotifier.value;
 
@@ -174,7 +177,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
       backgroundColor: scheme.surface,
       appBar: AppBar(
         title: Text(
-          'تقارير ولي الأمر والأداء الأكاديمي 📊',
+          l10n.translate('parent_report_title'),
           style: GoogleFonts.tajawal(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         centerTitle: true,
@@ -182,7 +185,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
           IconButton(
             onPressed: _copyReportToClipboard,
             icon: const Icon(Icons.share_rounded),
-            tooltip: 'نسخ ومشاركة التقرير',
+            tooltip: l10n.translate('copy_share_report'),
           ),
         ],
       ),
@@ -223,7 +226,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      profile.fullName.isNotEmpty ? profile.fullName : 'طالب المدرسة الذكية',
+                                      profile.fullName.isNotEmpty ? profile.fullName : l10n.translate('smart_school_student'),
                                       style: GoogleFonts.tajawal(
                                         fontSize: 19,
                                         fontWeight: FontWeight.w800,
@@ -250,14 +253,14 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
                               _buildSummaryStat(
-                                label: 'المعدل الأكاديمي العام',
+                                label: l10n.translate('overall_academic_average'),
                                 value: '${_generalAverage.toStringAsFixed(1)}%',
                                 icon: Icons.insights_rounded,
                               ),
                               Container(width: 1, height: 40, color: Colors.white24),
                               _buildSummaryStat(
-                                label: 'الدروس المكتملة',
-                                value: '$_totalCompletedLessons درس',
+                                label: l10n.translate('completed_lessons'),
+                                value: '$_totalCompletedLessons ${l10n.translate('lesson_word')}',
                                 icon: Icons.task_alt_rounded,
                               ),
                             ],
@@ -274,7 +277,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
                     onPressed: _copyReportToClipboard,
                     icon: const Icon(Icons.copy_all_rounded, size: 22),
                     label: Text(
-                      'نسخ ومشاركة التقرير مع الأسرة والمدرسة 📋',
+                      l10n.translate('copy_report_button'),
                       style: GoogleFonts.tajawal(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -290,7 +293,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
 
                   // 3. أداء المواد الدراسية
                   Text(
-                    'أداء المواد الدراسية (معدل الدروس المختبرة):',
+                    l10n.translate('subject_performance_tested'),
                     style: GoogleFonts.tajawal(fontSize: 16.5, fontWeight: FontWeight.w800, color: scheme.onSurface),
                   ),
                   const SizedBox(height: 12),
@@ -301,7 +304,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
                         padding: const EdgeInsets.all(24),
                         child: Center(
                           child: Text(
-                            'لم يقدم الطالب أي اختبارات للدروس حتى الآن.',
+                            l10n.translate('no_tests_taken_yet'),
                             style: GoogleFonts.tajawal(fontSize: 14.5, color: scheme.onSurfaceVariant),
                           ),
                         ),
@@ -352,7 +355,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'الأوسمة والشارات التقديرية (${_badges.where((b) => b.isUnlocked).length} من ${_badges.length}):',
+                        '${l10n.translate('badges_and_honors')} (${_badges.where((b) => b.isUnlocked).length} ${l10n.translate('of_word')} ${_badges.length}):',
                         style: GoogleFonts.tajawal(fontSize: 16.5, fontWeight: FontWeight.w800, color: scheme.onSurface),
                       ),
                     ],
@@ -396,7 +399,7 @@ class _ParentReportScreenState extends State<ParentReportScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              b.isUnlocked ? 'مكتسب ✨' : 'مقفل 🔒',
+                              b.isUnlocked ? l10n.translate('earned_badge') : l10n.translate('locked_badge'),
                               style: GoogleFonts.tajawal(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w600,

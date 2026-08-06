@@ -8,6 +8,7 @@ import '../../core/stores/user_profile_store.dart';
 import '../../data/subject_curriculum.dart';
 import 'unit_detail_screen.dart';
 import '../chat/chat_screen.dart';
+import '../../core/l10n/app_localizations.dart';
 
 class SubjectUnitsScreen extends StatefulWidget {
   const SubjectUnitsScreen({
@@ -106,7 +107,7 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                     if (unitsRaw.isNotEmpty) {
                       displayUnits = unitsRaw.asMap().entries.map((e) {
                         final map = e.value as Map? ?? {};
-                        String title = map['title'] as String? ?? 'الوحدة ${e.key + 1}';
+                        String title = map['title'] as String? ?? '${AppLocalizations.of(context).translate("unit_prefix")} ${e.key + 1}';
                         // إذا كانت المادة مقسمة لفروع دقيقة (الاجتماعيات، القرآن، الإسلامية) نستخدم العنوان الرسمي للفرع دائماً
                         if (e.key < widget.subject.units.length &&
                             (widget.subject.subjectId == 'social' ||
@@ -174,7 +175,7 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                               child: _HeaderBookBadge(
                                 subjectColor: widget.subject.color,
                                 bookTitle: bookTitle.isEmpty
-                                    ? 'الكتاب المدرسي'
+                                    ? AppLocalizations.of(context).translate('textbook')
                                     : bookTitle,
                                 onTap: () => _showBookOptionsSheet(
                                   context,
@@ -213,8 +214,8 @@ class _SubjectUnitsScreenState extends State<SubjectUnitsScreen> {
                               ? () {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: const Text(
-                                          'يجب إكمال الوحدات السابقة أولاً لتتمكن من فتح هذه الوحدة.'),
+                                      content: Text(
+                                          AppLocalizations.of(context).translate('unit_locked_error')),
                                       behavior: SnackBarBehavior.floating,
                                       backgroundColor: scheme.error,
                                     ),
@@ -307,7 +308,7 @@ class _UnitCard extends StatelessWidget {
                   children: [
                     if (!['social', 'english', 'quran', 'islamic'].contains(subject.subjectId))
                       Text(
-                        'الوحدة ${index + 1}',
+                        '${AppLocalizations.of(context).translate("unit_prefix")} ${index + 1}',
                         style: GoogleFonts.tajawal(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -353,7 +354,7 @@ class _UnitCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'التقدم في هذه الوحدة',
+                      AppLocalizations.of(context).translate('unit_progress'),
                       style: GoogleFonts.tajawal(
                         fontSize: 12,
                         color: scheme.onSurfaceVariant,
@@ -455,7 +456,7 @@ class _HeaderBookBadge extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'الكتاب',
+                    AppLocalizations.of(context).translate('book'),
                     style: GoogleFonts.tajawal(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
@@ -502,14 +503,14 @@ Future<void> _launchUrlHelper(BuildContext context, String url) async {
     } else {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر فتح الرابط.')),
+          SnackBar(content: Text(AppLocalizations.of(context).translate('cannot_open_link'))),
         );
       }
     }
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ أثناء محاولة فتح الرابط: $e')),
+        SnackBar(content: Text('${AppLocalizations.of(context).translate("open_link_error")} $e')),
       );
     }
   }
@@ -572,7 +573,7 @@ void _showBookOptionsSheet(
                         Text(
                           bookTitle.isNotEmpty
                               ? bookTitle
-                              : 'الكتاب الدراسي المعتمد — $semester',
+                              : '${AppLocalizations.of(context).translate("approved_textbook")} — ${semester == "الفصل الدراسي الأول" ? AppLocalizations.of(context).translate("semester_one") : AppLocalizations.of(context).translate("semester_two")}',
                           style: GoogleFonts.tajawal(
                             fontSize: 17.5,
                             fontWeight: FontWeight.w800,
@@ -581,7 +582,7 @@ void _showBookOptionsSheet(
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'متاح للقراءة السحابية المباشرة أو التحميل للمشاهدة بدون إنترنت عبر Google Drive',
+                          AppLocalizations.of(context).translate('book_description'),
                           style: GoogleFonts.tajawal(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w500,
@@ -604,7 +605,7 @@ void _showBookOptionsSheet(
                       },
                       icon: const Icon(Icons.visibility_rounded, size: 20),
                       label: Text(
-                        'تصفح الكتاب',
+                        AppLocalizations.of(context).translate('browse_book'),
                         style: GoogleFonts.tajawal(
                           fontWeight: FontWeight.w700,
                           fontSize: 14.5,
@@ -631,7 +632,7 @@ void _showBookOptionsSheet(
                       },
                       icon: const Icon(Icons.download_rounded, size: 20),
                       label: Text(
-                        'تحميل (PDF)',
+                        AppLocalizations.of(context).translate('download_pdf'),
                         style: GoogleFonts.tajawal(
                           fontWeight: FontWeight.w700,
                           fontSize: 14.5,

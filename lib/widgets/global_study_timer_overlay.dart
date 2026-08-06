@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/stores/study_timer_store.dart';
+import '../core/l10n/app_localizations.dart';
 
 /// ──────────────────────────────────────────────────────────────
 /// العداد العائم العالمي المطور ومؤقت الدراسة (Draggable Global Overlay Pill)
@@ -26,11 +27,12 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
   bool _isDragging = false;
   bool _isOverDismissZone = false;
 
-  String _formatDuration(Duration d) {
+  String _formatDuration(Duration d, BuildContext context) {
     final totalSeconds = d.inSeconds;
+    final loc = AppLocalizations.of(context);
     if (totalSeconds < 60) {
       // أقل من دقيقة: عرض الثواني فقط بصيغة مدمجة صغيرة
-      return '$totalSecondsث';
+      return '$totalSeconds${loc.translate("second_short")}';
     } else if (totalSeconds < 3600) {
       // من دقيقة إلى 59 دقيقة: عرض الدقائق والثواني
       final m = d.inMinutes.toString().padLeft(2, '0');
@@ -40,15 +42,16 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
       // ساعة فأكثر: عرض الساعات والدقائق حتى يبقى العداد صغيراً
       final h = d.inHours;
       final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-      return '$h:$mس';
+      return '$h:$m${loc.translate("hour_short")}';
     }
   }
 
-  String _formatTarget(int minutes) {
+  String _formatTarget(int minutes, BuildContext context) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    if (m == 0) return '$hس';
-    return '$hس و$mد';
+    final loc = AppLocalizations.of(context);
+    if (m == 0) return '$h${loc.translate("hour_short")}';
+    return '$h ${loc.translate("hour_short")} ${loc.translate("and_short")} $m ${loc.translate("min_short")}';
   }
 
   void _showTimerControlsModal(BuildContext context, StudyTimerState state) {
@@ -101,7 +104,7 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'إدارة مؤقت الدراسة العائم',
+                            AppLocalizations.of(context).translate('timer_mgmt_title'),
                             style: GoogleFonts.tajawal(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -109,7 +112,7 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
                             ),
                           ),
                           Text(
-                            'الحد الأدنى للهدف هو ساعتان (120 دقيقة)',
+                            AppLocalizations.of(context).translate('timer_mgmt_desc'),
                             style: GoogleFonts.tajawal(
                               fontSize: 13,
                               color: scheme.onSurfaceVariant,
@@ -125,7 +128,7 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'اختر الهدف الدراسي التراكمي:',
+                    AppLocalizations.of(context).translate('timer_select_target'),
                     style: GoogleFonts.tajawal(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -141,7 +144,7 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
                     final isSelected = state.targetMinutes == mins;
                     return ChoiceChip(
                       label: Text(
-                        _formatTarget(mins),
+                        _formatTarget(mins, context),
                         style: GoogleFonts.tajawal(
                           fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                           color: isSelected ? scheme.onPrimary : scheme.onSurface,
@@ -167,7 +170,7 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
                           Navigator.pop(ctx);
                         },
                         icon: const Icon(Icons.refresh_rounded, size: 20),
-                        label: Text('إعادة تعيين للصفر', style: GoogleFonts.tajawal(fontWeight: FontWeight.w700)),
+                        label: Text(AppLocalizations.of(context).translate('timer_reset'), style: GoogleFonts.tajawal(fontWeight: FontWeight.w700)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: scheme.error,
                           side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
@@ -184,7 +187,7 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
                           Navigator.pop(ctx);
                         },
                         icon: const Icon(Icons.visibility_off_rounded, size: 20),
-                        label: Text('إخفاء العداد', style: GoogleFonts.tajawal(fontWeight: FontWeight.w700)),
+                        label: Text(AppLocalizations.of(context).translate('timer_hide'), style: GoogleFonts.tajawal(fontWeight: FontWeight.w700)),
                         style: FilledButton.styleFrom(
                           backgroundColor: scheme.secondary,
                           foregroundColor: scheme.onSecondary,
@@ -224,7 +227,7 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
             }
 
             final scheme = Theme.of(context).colorScheme;
-            final elapsedText = _formatDuration(state.elapsed);
+            final elapsedText = _formatDuration(state.elapsed, context);
 
             return Stack(
               children: [
@@ -272,8 +275,8 @@ class _GlobalStudyTimerOverlayState extends State<GlobalStudyTimerOverlay> {
                           const SizedBox(width: 10),
                           Text(
                             _isOverDismissZone
-                                ? 'إفلات الآن لإخفاء العداد'
-                                : 'اسحب إلى هنا لإخفاء العداد',
+                                ? AppLocalizations.of(context).translate('timer_drop_to_hide')
+                                : AppLocalizations.of(context).translate('timer_drag_to_hide'),
                             style: GoogleFonts.tajawal(
                               fontSize: _isOverDismissZone ? 16 : 14.5,
                               fontWeight: _isOverDismissZone ? FontWeight.w900 : FontWeight.w700,

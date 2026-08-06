@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/stores/user_profile_store.dart';
+import '../../core/l10n/app_localizations.dart';
 import '../../services/firebase_service.dart';
 import '../../services/firebase_sync_service.dart';
 import '../../widgets/profile_image_picker_sheet.dart';
@@ -43,7 +44,6 @@ class ProfileEditorScreen extends StatefulWidget {
     );
   }
 
-  /// الصف الدراسي: السابع — التاسع فقط.
   static const List<String> gradeOptions = [
     'الصف السابع',
     'الصف الثامن',
@@ -156,7 +156,6 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
       if (!widget.isOnboarding) {
         Navigator.of(context).pop();
       } else {
-        // ── تهيئة Firebase لمستخدم جديد ──────────────────────────────
         FirebaseSyncService.initializeAllSubjects().ignore();
         FirebaseSyncService.initializeUserProgress(uid).ignore();
 
@@ -169,7 +168,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('حدث خطأ أثناء حفظ البيانات: $e', style: GoogleFonts.tajawal()),
+          content: Text('${AppLocalizations.of(context).translate("profile_save_error")} $e', style: GoogleFonts.tajawal()),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -266,7 +265,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 4, bottom: 8),
           child: Text(
-            'الجنس',
+            AppLocalizations.of(context).translate('gender'),
             style: GoogleFonts.tajawal(fontSize: 15, fontWeight: FontWeight.w600, color: scheme.onSurface),
           ),
         ),
@@ -335,9 +334,10 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
       backgroundColor: scheme.surfaceContainerLowest,
       appBar: AppBar(
         title: Text(
-          widget.isOnboarding ? 'إعداد الملف الشخصي' : 'تعديل الملف الشخصي',
+          widget.isOnboarding ? AppLocalizations.of(context).translate('setup_profile_title') : AppLocalizations.of(context).translate('edit_profile_title'),
           style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
         ),
+        centerTitle: true,
         automaticallyImplyLeading: !widget.isOnboarding,
       ),
       body: Form(
@@ -347,13 +347,13 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
           children: [
             if (widget.isOnboarding) ...[
               Text(
-                'مرحباً بك! 👋',
+                AppLocalizations.of(context).translate('welcome_onboarding'),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.tajawal(fontSize: 24, fontWeight: FontWeight.w900, color: scheme.primary),
               ),
               const SizedBox(height: 8),
               Text(
-                'الرجاء إكمال بياناتك لتهيئة التطبيق وعرض الدروس المناسبة لصفك.',
+                AppLocalizations.of(context).translate('onboarding_subtitle'),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.tajawal(fontSize: 14, color: scheme.onSurfaceVariant),
               ),
@@ -363,21 +363,21 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
             const SizedBox(height: 32),
             TextFormField(
               controller: _fullNameController,
-              decoration: _fieldDecoration(scheme, label: 'الاسم الرباعي', prefix: const Icon(Icons.person_outline_rounded)),
+              decoration: _fieldDecoration(scheme, label: AppLocalizations.of(context).translate('full_name'), prefix: const Icon(Icons.person_outline_rounded)),
               style: GoogleFonts.tajawal(fontSize: 16),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'يرجى إدخال الاسم الرباعي';
-                if (v.trim().split(RegExp(r'\s+')).length < 4) return 'يرجى كتابة الاسم رباعياً كما هو مطلوب';
+                if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('full_name_empty');
+                if (v.trim().split(RegExp(r'\s+')).length < 4) return AppLocalizations.of(context).translate('full_name_invalid');
                 return null;
               },
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _schoolController,
-              decoration: _fieldDecoration(scheme, label: 'المدرسة', prefix: const Icon(Icons.school_outlined)),
+              decoration: _fieldDecoration(scheme, label: AppLocalizations.of(context).translate('school'), prefix: const Icon(Icons.school_outlined)),
               style: GoogleFonts.tajawal(fontSize: 16),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'يرجى إدخال اسم المدرسة';
+                if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('school_empty');
                 return null;
               },
             ),
@@ -389,10 +389,19 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                   flex: 2,
                   child: (widget.isOnboarding || _isAdmin)
                       ? DropdownButtonFormField<String>(
-                          initialValue: _selectedGrade,
-                          decoration: _fieldDecoration(scheme, label: 'الصف'),
+                          value: _selectedGrade,
+                          decoration: _fieldDecoration(scheme, label: AppLocalizations.of(context).translate('grade_label')),
                           items: ProfileEditorScreen.gradeOptions
-                              .map((g) => DropdownMenuItem(value: g, child: Text(g, style: GoogleFonts.tajawal())))
+                              .map((g) {
+                                String locKey = g;
+                                if (g == 'الصف السابع') locKey = 'grade_seventh';
+                                else if (g == 'الصف الثامن') locKey = 'grade_eighth';
+                                else if (g == 'الصف التاسع') locKey = 'grade_ninth';
+                                return DropdownMenuItem(
+                                  value: g, 
+                                  child: Text(AppLocalizations.of(context).translate(locKey), style: GoogleFonts.tajawal())
+                                );
+                              })
                               .toList(),
                           onChanged: (v) { if (v != null) setState(() => _selectedGrade = v); },
                         )
@@ -401,7 +410,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                           readOnly: true,
                           decoration: _fieldDecoration(
                             scheme,
-                            label: 'الصف (لا يمكن تغييره)',
+                            label: AppLocalizations.of(context).translate('grade_readonly'),
                             suffix: Icon(Icons.lock_outline_rounded, color: scheme.onSurfaceVariant.withValues(alpha: 0.5)),
                           ),
                           style: GoogleFonts.tajawal(fontSize: 16, color: scheme.onSurfaceVariant),
@@ -412,12 +421,12 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                   child: TextFormField(
                     controller: _ageController,
                     keyboardType: TextInputType.number,
-                    decoration: _fieldDecoration(scheme, label: 'العمر'),
+                    decoration: _fieldDecoration(scheme, label: AppLocalizations.of(context).translate('age')),
                     style: GoogleFonts.tajawal(fontSize: 16),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'يرجى إدخال العمر';
+                      if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('age_empty');
                       final age = int.tryParse(v.trim());
-                      if (age == null || age < 5 || age > 25) return 'عمر غير منطقي';
+                      if (age == null || age < 5 || age > 25) return AppLocalizations.of(context).translate('age_invalid');
                       return null;
                     },
                   ),
@@ -437,7 +446,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_fieldRadius)),
                 ),
                 child: Text(
-                  widget.isOnboarding ? 'حفظ وبدء التعلم 🚀' : 'حفظ التعديلات',
+                  widget.isOnboarding ? AppLocalizations.of(context).translate('save_start_learning') : AppLocalizations.of(context).translate('save_changes'),
                   style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
               ),

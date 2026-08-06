@@ -10,6 +10,7 @@ import '../shell/main_navigation_screen.dart';
 import 'profile_editor_screen.dart';
 import 'register_screen.dart';
 import '../../services/fcm_service.dart';
+import '../../core/l10n/app_localizations.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.showVerificationMessage = false});
@@ -49,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('أدخل بريدك الإلكتروني أولاً', style: GoogleFonts.tajawal()),
+          content: Text(AppLocalizations.of(context).translate('enter_email_first'), style: GoogleFonts.tajawal()),
           backgroundColor: Colors.orange.shade700,
         ),
       );
@@ -60,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('تم إرسال رابط إعادة تعيين كلمة المرور إلى $email', style: GoogleFonts.tajawal()),
+          content: Text('${AppLocalizations.of(context).translate("reset_link_sent")} $email', style: GoogleFonts.tajawal()),
           backgroundColor: Colors.green.shade700,
           duration: const Duration(seconds: 5),
         ),
@@ -69,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('تعذّر الإرسال. تحقق من البريد الإلكتروني.', style: GoogleFonts.tajawal()),
+          content: Text(AppLocalizations.of(context).translate('reset_link_error'), style: GoogleFonts.tajawal()),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -151,13 +152,13 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      String message = 'تعذر تسجيل الدخول، يرجى المحاولة مرة أخرى.';
+      String message = AppLocalizations.of(context).translate('login_error_generic');
       if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
-        message = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+        message = AppLocalizations.of(context).translate('login_error_wrong_creds');
       } else if (e.code == 'invalid-email') {
-        message = 'صيغة البريد الإلكتروني غير صحيحة.';
+        message = AppLocalizations.of(context).translate('login_error_invalid_email');
       } else if (e.code == 'user-disabled') {
-        message = 'هذا الحساب معطل.';
+        message = AppLocalizations.of(context).translate('login_error_disabled');
       } else if (e.message != null && e.message!.isNotEmpty) {
         message = e.message!;
       }
@@ -172,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('فشل تسجيل الدخول: $e', style: GoogleFonts.tajawal()),
+          content: Text('${AppLocalizations.of(context).translate("login_failed")} $e', style: GoogleFonts.tajawal()),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
         ),
@@ -240,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('فشل تسجيل الدخول بواسطة جوجل: $e', style: GoogleFonts.tajawal())),
+        SnackBar(content: Text('${AppLocalizations.of(context).translate("google_login_failed")} $e', style: GoogleFonts.tajawal())),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -364,7 +365,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       
                       Text(
-                        'تسجيل الدخول',
+                        AppLocalizations.of(context).translate('login'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
                           fontSize: 26,
@@ -374,7 +375,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى حسابك الدراسي.',
+                        AppLocalizations.of(context).translate('login_subtitle'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.tajawal(
                           fontSize: 14,
@@ -409,12 +410,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
-                              decoration: _fieldDecoration(scheme, label: 'البريد الإلكتروني', icon: Icons.email_outlined),
+                              decoration: _fieldDecoration(scheme, label: AppLocalizations.of(context).translate('email_label'), icon: Icons.email_outlined),
                               style: GoogleFonts.tajawal(fontSize: 16),
                               validator: (v) {
-                                if (v == null || v.trim().isEmpty) return 'يرجى إدخال البريد الإلكتروني';
+                                if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('email_empty');
                                 final regex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                                if (!regex.hasMatch(v.trim())) return 'يرجى إدخال بريد إلكتروني صحيح';
+                                if (!regex.hasMatch(v.trim())) return AppLocalizations.of(context).translate('email_invalid');
                                 return null;
                               },
                             ),
@@ -424,7 +425,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 obscureText: _obscurePassword,
                                 decoration: _fieldDecoration(
                                   scheme,
-                                  label: 'كلمة المرور',
+                                  label: AppLocalizations.of(context).translate('password_label'),
                                   icon: Icons.lock_outline_rounded,
                                   suffix: IconButton(
                                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -436,8 +437,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 style: GoogleFonts.tajawal(fontSize: 16),
                                 validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'يرجى إدخال كلمة المرور';
-                                  if (v.trim().length < 6) return 'كلمة المرور يجب أن لا تقل عن 6 خانات';
+                                  if (v == null || v.trim().isEmpty) return AppLocalizations.of(context).translate('password_empty');
+                                  if (v.trim().length < 6) return AppLocalizations.of(context).translate('password_short');
                                   return null;
                                 },
                               ),
@@ -450,7 +451,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     foregroundColor: scheme.primary,
                                   ),
                                   child: Text(
-                                    'نسيت كلمة المرور؟',
+                                    AppLocalizations.of(context).translate('forgot_password'),
                                     style: GoogleFonts.tajawal(fontWeight: FontWeight.w600, fontSize: 13),
                                   ),
                                 ),
@@ -472,7 +473,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             elevation: 0,
                           ),
                           child: Text(
-                            'تسجيل الدخول',
+                            AppLocalizations.of(context).translate('login'),
                             style: GoogleFonts.tajawal(fontSize: 18, fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -489,7 +490,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             errorBuilder: (c, e, s) => const Icon(Icons.g_mobiledata, size: 28),
                           ),
                           label: Text(
-                            'تسجيل الدخول بواسطة Google',
+                            AppLocalizations.of(context).translate('login_google'),
                             style: GoogleFonts.tajawal(fontSize: 15, fontWeight: FontWeight.w600, color: scheme.onSurface),
                           ),
                           style: OutlinedButton.styleFrom(
@@ -512,7 +513,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                           icon: const Icon(Icons.person_add_rounded, size: 20),
                           label: Text(
-                            'إنشاء حساب جديد',
+                            AppLocalizations.of(context).translate('create_account'),
                             style: GoogleFonts.tajawal(
                               fontWeight: FontWeight.w800,
                               fontSize: 15,

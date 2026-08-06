@@ -173,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     size: 16, color: Colors.orange.shade700),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'تعمل بالبيانات المحفوظة — بدون اتصال',
+                                  AppLocalizations.of(context).translate('offline_mode'),
                                   style: GoogleFonts.tajawal(
                                     fontSize: 12,
                                     color: Colors.orange.shade700,

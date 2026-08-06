@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/stores/user_profile_store.dart';
+import '../../core/l10n/app_localizations.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -62,21 +63,21 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     if (mounted) setState(() {});
   }
 
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'الآن';
+  String _formatTimestamp(BuildContext context, dynamic timestamp) {
+    if (timestamp == null) return AppLocalizations.of(context).translate('now');
     DateTime dt;
     if (timestamp is Timestamp) {
       dt = timestamp.toDate();
     } else if (timestamp is DateTime) {
       dt = timestamp;
     } else {
-      return 'الآن';
+      return AppLocalizations.of(context).translate('now');
     }
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'منذ لحظات';
-    if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
-    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
-    if (diff.inDays == 1) return 'أمس';
+    if (diff.inMinutes < 1) return AppLocalizations.of(context).translate('moments_ago');
+    if (diff.inMinutes < 60) return '${diff.inMinutes} ${AppLocalizations.of(context).translate("minutes_ago")}';
+    if (diff.inHours < 24) return '${diff.inHours} ${AppLocalizations.of(context).translate("hours_ago")}';
+    if (diff.inDays == 1) return AppLocalizations.of(context).translate('yesterday');
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
@@ -90,7 +91,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'الإشعارات والتنبيهات',
+          AppLocalizations.of(context).translate('notifications_title'),
           style: GoogleFonts.tajawal(fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
@@ -99,9 +100,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           labelStyle: GoogleFonts.tajawal(fontWeight: FontWeight.w800, fontSize: 14),
           unselectedLabelStyle: GoogleFonts.tajawal(fontWeight: FontWeight.w600, fontSize: 13),
           indicatorColor: scheme.primary,
-          tabs: const [
-            Tab(text: '📢 إشعارات المدرسة', icon: null),
-            Tab(text: '📊 نتائجي', icon: null),
+          tabs: [
+            Tab(text: AppLocalizations.of(context).translate('school_notifications_tab'), icon: null),
+            Tab(text: AppLocalizations.of(context).translate('my_results_tab'), icon: null),
           ],
         ),
       ),
@@ -147,7 +148,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
   final bool notificationsEnabled;
   final Future<void> Function(List<QueryDocumentSnapshot>) onMarkAllRead;
   final Future<void> Function(String) onMarkOneRead;
-  final String Function(dynamic) formatTimestamp;
+  final String Function(BuildContext, dynamic) formatTimestamp;
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +171,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
                   Icon(Icons.error_outline_rounded, size: 54, color: scheme.error),
                   const SizedBox(height: 12),
                   Text(
-                    'حدث خطأ في تحميل الإشعارات',
+                    AppLocalizations.of(context).translate('error_loading_notifications'),
                     style: GoogleFonts.tajawal(
                         fontSize: 16, fontWeight: FontWeight.w700, color: scheme.onSurface),
                   ),
@@ -210,13 +211,13 @@ class _SchoolNotificationsTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'لا توجد إشعارات حالياً',
+                    AppLocalizations.of(context).translate('no_notifications_currently'),
                     style: GoogleFonts.tajawal(
                         fontSize: 18, fontWeight: FontWeight.w800, color: scheme.onSurface),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'ستظهر هنا جميع إعلانات المدرسة وتنبيهات المعلمين الخاصة بصفك الدراسي.',
+                    AppLocalizations.of(context).translate('no_notifications_desc'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.tajawal(
                         fontSize: 14, color: scheme.onSurfaceVariant, height: 1.4),
@@ -242,7 +243,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'تنبيه: الإشعارات الفورية معطلة من إعدادات التطبيق.',
+                        AppLocalizations.of(context).translate('notifications_disabled_warning'),
                         style: GoogleFonts.tajawal(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -262,7 +263,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'لديك ($unreadCount) إشعار جديد',
+                        '${AppLocalizations.of(context).translate("unread_notifications_count")} ($unreadCount) ${AppLocalizations.of(context).translate("new_notification_suffix")}',
                         style: GoogleFonts.tajawal(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
@@ -272,7 +273,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
                     TextButton.icon(
                       onPressed: () => onMarkAllRead(docs),
                       icon: const Icon(Icons.done_all_rounded, size: 18),
-                      label: Text('قراءة الكل',
+                      label: Text(AppLocalizations.of(context).translate('read_all'),
                           style: GoogleFonts.tajawal(
                               fontWeight: FontWeight.bold, fontSize: 12)),
                     ),
@@ -304,15 +305,15 @@ class _SchoolNotificationsTab extends StatelessWidget {
                   if (type == 'urgent' || type == 'هام' || type == 'عاجل وهام') {
                     cardAccentColor = Colors.red.shade600;
                     cardIcon = Icons.notification_important_rounded;
-                    typeLabel = 'عاجل وهام';
+                    typeLabel = AppLocalizations.of(context).translate('urgent_and_important');
                   } else if (type == 'study' || type == 'أكاديمي' || type == 'درس جديد') {
                     cardAccentColor = Colors.amber.shade700;
                     cardIcon = Icons.auto_stories_rounded;
-                    typeLabel = 'تنبيه دراسي';
+                    typeLabel = AppLocalizations.of(context).translate('study_alert');
                   } else {
                     cardAccentColor = scheme.primary;
                     cardIcon = Icons.notifications_active_rounded;
-                    typeLabel = 'تنبيه عام';
+                    typeLabel = AppLocalizations.of(context).translate('general_alert');
                   }
 
                   return Card(
@@ -390,7 +391,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
                                       ],
                                       const Spacer(),
                                       Text(
-                                        formatTimestamp(timestamp),
+                                        formatTimestamp(context, timestamp),
                                         style: GoogleFonts.tajawal(
                                             fontSize: 11.5,
                                             color: scheme.onSurfaceVariant),
@@ -460,7 +461,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
                                                 size: 16, color: scheme.primary),
                                             const SizedBox(width: 6),
                                             Text(
-                                              'فتح الرابط المرفق',
+                                              AppLocalizations.of(context).translate('open_attached_link'),
                                               style: GoogleFonts.tajawal(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w700,
@@ -478,7 +479,7 @@ class _SchoolNotificationsTab extends StatelessWidget {
                                           size: 14, color: scheme.onSurfaceVariant),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'من: $sender',
+                                        '${AppLocalizations.of(context).translate("from_sender")}: $sender',
                                         style: GoogleFonts.tajawal(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
@@ -524,7 +525,7 @@ class _MyResultsTab extends StatelessWidget {
   });
 
   final String uid;
-  final String Function(dynamic) formatTimestamp;
+  final String Function(BuildContext, dynamic) formatTimestamp;
 
   // تحويل اسم اللون من Firestore إلى Color
   static Color _parseColor(String? hex, ColorScheme scheme) {
@@ -552,16 +553,16 @@ class _MyResultsTab extends StatelessWidget {
   }
 
   // شارة الـ trend
-  static Widget _trendBadge(String? trend, ColorScheme scheme) {
+  static Widget _trendBadge(BuildContext context, String? trend, ColorScheme scheme) {
     switch (trend) {
       case 'improved':
-        return _badge('↑ تحسّن', const Color(0xFF10B981));
+        return _badge(AppLocalizations.of(context).translate('trend_improved'), const Color(0xFF10B981));
       case 'stable':
-        return _badge('← ثبات', Colors.blueGrey);
+        return _badge(AppLocalizations.of(context).translate('trend_stable'), Colors.blueGrey);
       case 'declined':
-        return _badge('↓ تراجع', Colors.deepOrange);
+        return _badge(AppLocalizations.of(context).translate('trend_declined'), Colors.deepOrange);
       case 'firstAttempt':
-        return _badge('✦ أول محاولة', scheme.primary);
+        return _badge(AppLocalizations.of(context).translate('trend_first_attempt'), scheme.primary);
       default:
         return const SizedBox.shrink();
     }
@@ -592,7 +593,7 @@ class _MyResultsTab extends StatelessWidget {
     if (uid.isEmpty) {
       return Center(
         child: Text(
-          'يجب تسجيل الدخول لعرض النتائج',
+          AppLocalizations.of(context).translate('login_required_results'),
           style: GoogleFonts.tajawal(fontSize: 15, color: scheme.onSurfaceVariant),
         ),
       );
@@ -610,7 +611,7 @@ class _MyResultsTab extends StatelessWidget {
         if (snapshot.hasError) {
           return Center(
             child: Text(
-              'حدث خطأ في تحميل النتائج',
+              AppLocalizations.of(context).translate('error_loading_results'),
               style: GoogleFonts.tajawal(color: scheme.error),
             ),
           );
@@ -639,7 +640,7 @@ class _MyResultsTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'لا توجد نتائج بعد',
+                    AppLocalizations.of(context).translate('no_results_yet'),
                     style: GoogleFonts.tajawal(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -647,7 +648,7 @@ class _MyResultsTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'ستظهر هنا نتائج اختباراتك تلقائياً بعد إكمال أي اختبار.',
+                    AppLocalizations.of(context).translate('no_results_desc'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.tajawal(
                         fontSize: 14, color: scheme.onSurfaceVariant, height: 1.4),
@@ -664,7 +665,7 @@ class _MyResultsTab extends StatelessWidget {
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>? ?? {};
-            final title = data['title'] as String? ?? 'نتيجة اختبار';
+            final title = data['title'] as String? ?? AppLocalizations.of(context).translate('test_result');
             final body = data['body'] as String? ?? '';
             final type = data['type'] as String? ?? 'quiz_result';
             final trend = data['trend'] as String?;
@@ -730,7 +731,7 @@ class _MyResultsTab extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  isUnitExam ? 'اختبار وحدة' : 'اختبار درس',
+                                  isUnitExam ? AppLocalizations.of(context).translate('unit_test') : AppLocalizations.of(context).translate('lesson_test'),
                                   style: GoogleFonts.tajawal(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w800,
@@ -738,10 +739,10 @@ class _MyResultsTab extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              _trendBadge(trend, scheme),
+                              _trendBadge(context, trend, scheme),
                               const Spacer(),
                               Text(
-                                formatTimestamp(timestamp),
+                                formatTimestamp(context, timestamp),
                                 style: GoogleFonts.tajawal(
                                     fontSize: 11, color: scheme.onSurfaceVariant),
                               ),
@@ -820,7 +821,7 @@ class _MyResultsTab extends StatelessWidget {
                                     ),
                                     if (prevPct != null) ...[
                                       Text(
-                                        ' (سابقاً $prevPct٪)',
+                                        ' ${AppLocalizations.of(context).translate("previously")} $prevPct٪)',
                                         style: GoogleFonts.tajawal(
                                             fontSize: 11,
                                             color: scheme.onSurfaceVariant),

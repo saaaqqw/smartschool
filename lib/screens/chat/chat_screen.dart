@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/ai_config_service.dart';
 import '../../services/connectivity_service.dart';
+import '../../core/l10n/app_localizations.dart';
 
 /// Chat bot screen using Groq Llama3 model.
 ///
@@ -92,18 +93,27 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<_ChatMessage> _messages = [];
 
   bool _isLoading = false;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeWelcomeMessage();
-    _loadChatHistory();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      _initializeWelcomeMessage();
+      _loadChatHistory();
+    }
   }
 
   void _initializeWelcomeMessage() {
-    String welcomeText = 'مرحباً! أنا مساعدك التعليمي الذكي للطلاب. اكتب سؤالك وسأساعدك بطريقة واضحة خطوة بخطوة.';
+    String welcomeText = AppLocalizations.of(context).translate('chat_welcome_general');
     if (widget.lessonName != null && widget.unitName != null) {
-      welcomeText = 'مرحباً بك في درس (${widget.lessonName}) من وحدة (${widget.unitName})! أنا هنا لمساعدتك، هل لديك سؤال حول هذا الدرس؟';
+      welcomeText = '${AppLocalizations.of(context).translate("chat_welcome_lesson_part1")} (${widget.lessonName}) ${AppLocalizations.of(context).translate("chat_welcome_lesson_part2")} (${widget.unitName})${AppLocalizations.of(context).translate("chat_welcome_lesson_part3")}';
     }
     _messages.add(_ChatMessage(text: welcomeText, isUser: false));
   }
@@ -160,6 +170,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<String> _generateReply(String userText) async {
+    final localizations = AppLocalizations.of(context);
     // 1. توليد مفتاح فريد مشفر للكاش بناءً على نص السؤال والمادة
     final base = widget.lessonName ?? widget.subjectName ?? "general";
     final rawKey = 'ai_cache_${base}_$userText';
@@ -177,23 +188,23 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final prompt = [
-      'أنت مساعد تعليمي ذكي للطلاب في تطبيق Smart School. اشرح لي دائماً باللغة العربية بشكل مبسط ومنظم.',
+      localizations.translate('chat_system_prompt_general'),
       if (widget.subjectName != null && widget.subjectName!.trim().isNotEmpty)
-        'أنا حالياً أدرس مادة: ${widget.subjectName!.trim()}.',
+        '${localizations.translate("chat_system_prompt_subject")}: ${widget.subjectName!.trim()}.',
       if (widget.unitName != null && widget.unitName!.trim().isNotEmpty)
-        'في الوحدة: ${widget.unitName!.trim()}.',
+        '${localizations.translate("chat_system_prompt_unit")}: ${widget.unitName!.trim()}.',
       if (widget.lessonName != null && widget.lessonName!.trim().isNotEmpty)
-        'ودرسي الحالي هو: ${widget.lessonName!.trim()}.',
+        '${localizations.translate("chat_system_prompt_lesson")}: ${widget.lessonName!.trim()}.',
       if (widget.lessonContent != null && widget.lessonContent!.trim().isNotEmpty)
-        'محتوى وملخص الدرس هو التالي (اعتمد عليه في إجاباتك): \n${widget.lessonContent!.trim()}',
-      'سؤال الطالب: $userText',
-      'قدّم الإجابة في نقاط مرتبة قدر الإمكان. إذا كان السؤال يتطلب خطوة/حل، ابدأ بالخطوة الأولى ثم التالية.',
+        '${localizations.translate("chat_system_prompt_content")}: \n${widget.lessonContent!.trim()}',
+      '${localizations.translate("chat_system_prompt_question")}: $userText',
+      localizations.translate('chat_system_prompt_formatting'),
     ].join('\n');
 
     try {
       final apiKey = await AiConfigService.getApiKey();
       if (apiKey.isEmpty) {
-        return '⚠️ عذراً، لم يتم إعداد مفتاح الذكاء الاصطناعي في قاعدة البيانات بعد. يرجى من مسؤول النظام إضافة المفتاح (apiKey) في Firestore في المسار (settings/ai_config).';
+        return localizations.translate('chat_missing_api_key');
       }
       final modelName = await AiConfigService.getModelName();
       final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
@@ -235,15 +246,15 @@ class _ChatScreenState extends State<ChatScreen> {
         return finalReply;
       } else {
         debugPrint('Groq API Error: ${response.statusCode} - ${response.body}');
-        return 'عذراً، فشل الحصول على رد حالياً. رمز الخطأ: ${response.statusCode}';
+        return '${localizations.translate("chat_api_error")} ${response.statusCode}';
       }
     } catch (e) {
       // تمييز خطأ الشبكة عن باقي الأخطاء
       final offline = !(await ConnectivityService.isConnected());
       if (offline) {
-        return '📡 لا يوجد اتصال بالإنترنت. يرجى المحاولة عند الاتصال.';
+        return localizations.translate('chat_no_internet');
       }
-      return 'حدث خطأ أثناء الاتصال بالخادم. حاول مجدداً.';
+      return localizations.translate('chat_server_error');
     }
   }
 
@@ -264,8 +275,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!isOnline) {
       setState(() {
         _messages.add(
-          const _ChatMessage(
-            text: '📡 أنت غير متصل بالإنترنت\n\nالذكاء الاصطناعي يحتاج اتصالاً للإجابة. يرجى الاتصال والمحاولة مجدداً.',
+          _ChatMessage(
+            text: AppLocalizations.of(context).translate('chat_offline_warning'),
             isUser: false,
           ),
         );
@@ -294,7 +305,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _messages.add(
           _ChatMessage(
-            text: 'عذراً، حدث خطأ: $e',
+            text: '${AppLocalizations.of(context).translate("chat_general_error")}: $e',
             isUser: false,
           ),
         );
@@ -332,7 +343,7 @@ class _ChatScreenState extends State<ChatScreen> {
           backgroundColor: scheme.surfaceContainerLowest,
           surfaceTintColor: scheme.surfaceContainerLowest,
           title: Text(
-            'مساعد Smart School',
+            AppLocalizations.of(context).translate('chat_title'),
             style: GoogleFonts.tajawal(
               fontWeight: FontWeight.w800,
               fontSize: 18,
@@ -343,21 +354,21 @@ class _ChatScreenState extends State<ChatScreen> {
           actions: [
             IconButton(
               icon: const Icon(Icons.delete_sweep_rounded),
-              tooltip: 'مسح المحادثة',
+              tooltip: AppLocalizations.of(context).translate('chat_clear_tooltip'),
               onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: Text('مسح المحادثة', style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
-                    content: Text('هل أنت متأكد أنك تريد مسح سجل المحادثة بالكامل؟', style: GoogleFonts.tajawal()),
+                    title: Text(AppLocalizations.of(context).translate('chat_clear_title'), style: GoogleFonts.tajawal(fontWeight: FontWeight.bold)),
+                    content: Text(AppLocalizations.of(context).translate('chat_clear_confirm'), style: GoogleFonts.tajawal()),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
-                        child: Text('إلغاء', style: GoogleFonts.tajawal()),
+                        child: Text(AppLocalizations.of(context).translate('cancel'), style: GoogleFonts.tajawal()),
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: Text('مسح', style: GoogleFonts.tajawal(color: Colors.red)),
+                        child: Text(AppLocalizations.of(context).translate('clear'), style: GoogleFonts.tajawal(color: Colors.red)),
                       ),
                     ],
                   ),
@@ -415,7 +426,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         maxLines: 5,
                         onSubmitted: (_) => _sendMessage(),
                         decoration: InputDecoration(
-                          hintText: 'اكتب سؤالك...',
+                          hintText: AppLocalizations.of(context).translate('chat_input_hint'),
                           hintStyle: GoogleFonts.tajawal(
                             color: scheme.onSurfaceVariant,
                             fontWeight: FontWeight.w500,
@@ -580,7 +591,7 @@ class _TypingBubble extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'جارٍ الكتابة...',
+                  AppLocalizations.of(context).translate('chat_typing'),
                   style: GoogleFonts.tajawal(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,

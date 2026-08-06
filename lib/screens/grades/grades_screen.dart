@@ -9,6 +9,7 @@ import '../../services/ai_recommendation_service.dart';
 import '../../data/subject_curriculum.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../services/db_keys.dart';
+import '../../core/l10n/app_localizations.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // نموذج البيانات
@@ -32,13 +33,13 @@ class GradeEntry {
   int get percent => (ratio * 100).round();
 
   /// التقييم النصي بناءً على النسبة المئوية
-  String get rating {
-    if (percent >= 95) return 'ممتاز+';
-    if (percent >= 90) return 'ممتاز';
-    if (percent >= 80) return 'جيد جداً';
-    if (percent >= 70) return 'جيد';
-    if (percent >= 60) return 'مقبول';
-    return 'ضعيف';
+  String get ratingKey {
+    if (percent >= 95) return 'rating_exc_plus';
+    if (percent >= 90) return 'rating_exc';
+    if (percent >= 80) return 'rating_vg';
+    if (percent >= 70) return 'rating_good';
+    if (percent >= 60) return 'rating_acc';
+    return 'rating_poor';
   }
 
   /// هل تحتاج هذه المادة إلى تحسين (جيد أو أقل)
@@ -160,11 +161,11 @@ class _GradesScreenState extends State<GradesScreen>
       
       final Map<int, List<double>> dailyScores = {};
       final List<String> labels = List.filled(7, '');
-      const arabicDays = ['إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت', 'أحد'];
+      const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
       for (int i = 0; i < 7; i++) {
         final targetDate = todayMidnight.subtract(Duration(days: 6 - i));
-        labels[i] = arabicDays[targetDate.weekday - 1];
+        labels[i] = dayKeys[targetDate.weekday - 1];
       }
 
       for (final doc in query.docs) {
@@ -300,7 +301,7 @@ class _GradesScreenState extends State<GradesScreen>
     if (uid.isEmpty) {
       return Scaffold(
         appBar: _buildAppBar(scheme, context),
-        body: const Center(child: Text('يرجى تسجيل الدخول أولاً.')),
+        body: Center(child: Text(AppLocalizations.of(context).translate('please_login_first'))),
       );
     }
 
@@ -363,7 +364,7 @@ class _GradesScreenState extends State<GradesScreen>
                 sliver: SliverToBoxAdapter(
                   child: _SectionTitle(
                     icon: Icons.grid_view_rounded,
-                    title: 'أداء المواد الدراسية',
+                    title: AppLocalizations.of(context).translate('subject_performance'),
                     scheme: scheme,
                   ),
                 ),
@@ -415,7 +416,7 @@ class _GradesScreenState extends State<GradesScreen>
                 sliver: SliverToBoxAdapter(
                   child: _SectionTitle(
                     icon: Icons.trending_up_rounded,
-                    title: 'مواد تحتاج إلى تحسين',
+                    title: AppLocalizations.of(context).translate('subjects_need_improvement'),
                     scheme: scheme,
                     badgeCount: needsImprovement.length,
                   ),
@@ -520,7 +521,7 @@ class _GradesScreenState extends State<GradesScreen>
       surfaceTintColor: Colors.transparent,
       backgroundColor: scheme.surfaceContainerLowest,
       title: Text(
-        'الدرجات',
+        AppLocalizations.of(context).translate('grades_title'),
         style: GoogleFonts.tajawal(
           fontWeight: FontWeight.w800,
           fontSize: 20,
@@ -613,7 +614,7 @@ class _GradesScreenState extends State<GradesScreen>
                     ),
                   ),
                   child: Text(
-                    entry.rating,
+                    AppLocalizations.of(context).translate(entry.ratingKey),
                     style: GoogleFonts.tajawal(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -696,12 +697,12 @@ class _GpaSummaryHeader extends StatelessWidget {
 
   String _overallRating() {
     final p = (avgRatio * 100).round();
-    if (p >= 95) return 'ممتاز+';
-    if (p >= 90) return 'ممتاز';
-    if (p >= 80) return 'جيد جداً';
-    if (p >= 70) return 'جيد';
-    if (p >= 60) return 'مقبول';
-    return 'ضعيف';
+    if (p >= 95) return 'rating_exc_plus';
+    if (p >= 90) return 'rating_exc';
+    if (p >= 80) return 'rating_vg';
+    if (p >= 70) return 'rating_good';
+    if (p >= 60) return 'rating_acc';
+    return 'rating_poor';
   }
 
   @override
@@ -771,7 +772,7 @@ class _GpaSummaryHeader extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'معدلك',
+                            AppLocalizations.of(context).translate('your_gpa'),
                             style: GoogleFonts.tajawal(
                               fontSize: 11,
                               color: Colors.white70,
@@ -789,7 +790,7 @@ class _GpaSummaryHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _overallRating(),
+                      AppLocalizations.of(context).translate(_overallRating()),
                       style: GoogleFonts.tajawal(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
@@ -798,7 +799,7 @@ class _GpaSummaryHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${entries.length} مادة — $passed ناجحة',
+                      '${entries.length} ${AppLocalizations.of(context).translate('subjects_count_label')} — $passed ${AppLocalizations.of(context).translate('passed_count_label')}',
                       style: GoogleFonts.tajawal(
                         fontSize: 13,
                         color: Colors.white70,
@@ -814,7 +815,7 @@ class _GpaSummaryHeader extends StatelessWidget {
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              'الأفضل: ${best.subject} (${best.percent}%)',
+                              '${AppLocalizations.of(context).translate('the_best')}: ${best.subject} (${best.percent}%)',
                               style: GoogleFonts.tajawal(
                                 fontSize: 12,
                                 color: Colors.white.withValues(alpha: 0.9),
@@ -840,7 +841,7 @@ class _GpaSummaryHeader extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'التقدم العام',
+                    AppLocalizations.of(context).translate('general_progress'),
                     style: GoogleFonts.tajawal(
                       fontSize: 12,
                       color: Colors.white70,
@@ -979,7 +980,7 @@ class _SubjectCircleCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    entry.rating,
+                    AppLocalizations.of(context).translate(entry.ratingKey),
                     style: GoogleFonts.tajawal(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w700,
@@ -1185,7 +1186,7 @@ class _ImprovementCardState extends State<_ImprovementCard> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        widget.entry.rating,
+                        AppLocalizations.of(context).translate(widget.entry.ratingKey),
                         style: GoogleFonts.tajawal(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,

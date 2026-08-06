@@ -4,9 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../home/dashboard_screen.dart';
 import '../grades/grades_screen.dart';
-import '../study/plan_screen.dart';
 import '../settings/settings_screen.dart';
+import '../study/plan_screen.dart';
 import '../subjects/subjects_screen.dart';
+import '../../core/l10n/app_localizations.dart';
 
 /// الحاوية الرئيسية: شريط سفلي + تمرير أفقي بين 5 شاشات.
 ///
@@ -67,14 +68,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             borderRadius: BorderRadius.circular(24),
           ),
           title: Text(
-            'تأكيد الخروج',
+            AppLocalizations.of(context).translate('confirm_exit'),
             style: GoogleFonts.tajawal(
               fontWeight: FontWeight.w800,
               fontSize: 18,
             ),
           ),
           content: Text(
-            'هل أنت متأكد من الخروج من التطبيق؟',
+            AppLocalizations.of(context).translate('exit_warning'),
             style: GoogleFonts.tajawal(
               fontSize: 15,
             ),
@@ -83,7 +84,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: Text(
-                'لا',
+                AppLocalizations.of(context).translate('no'),
                 style: GoogleFonts.tajawal(
                   fontWeight: FontWeight.w700,
                   color: scheme.primary,
@@ -100,7 +101,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 ),
               ),
               child: Text(
-                'نعم',
+                AppLocalizations.of(context).translate('yes'),
                 style: GoogleFonts.tajawal(
                   fontWeight: FontWeight.w700,
                 ),
@@ -158,31 +159,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             fontWeight: FontWeight.w500,
           ),
           onTap: _goToPage,
-          items: const [
+          items: [
             BottomNavigationBarItem(
               icon: Icon(Icons.home_rounded),
               activeIcon: Icon(Icons.home_rounded, size: 28),
-              label: 'الرئيسية',
+              label: AppLocalizations.of(context).translate('nav_home'),
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.menu_book_rounded),
               activeIcon: Icon(Icons.menu_book_rounded, size: 28),
-              label: 'المواد',
+              label: AppLocalizations.of(context).translate('nav_subjects'),
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.event_note_rounded),
               activeIcon: Icon(Icons.event_note_rounded, size: 28),
-              label: 'الخطة',
+              label: AppLocalizations.of(context).translate('nav_plan'),
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.bar_chart_rounded),
               activeIcon: Icon(Icons.bar_chart_rounded, size: 28),
-              label: 'الدرجات',
+              label: AppLocalizations.of(context).translate('nav_grades'),
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.settings_rounded),
               activeIcon: Icon(Icons.settings_rounded, size: 28),
-              label: 'الإعدادات',
+              label: AppLocalizations.of(context).translate('nav_settings'),
             ),
           ],
         ),
