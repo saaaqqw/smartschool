@@ -796,16 +796,28 @@ class _SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Material(
-      color: scheme.surfaceContainerLow,
-      elevation: isDark ? 2 : 1,
-      shadowColor: scheme.shadow.withValues(alpha: 0.12),
-      surfaceTintColor: scheme.surfaceTint.withValues(alpha: isDark ? 0.18 : 0.08),
-      borderRadius: BorderRadius.circular(_kSettingsCardRadius),
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(_kSettingsCardRadius),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.6),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(_kSettingsCardRadius),
-        child: child,
+        child: Material(
+          color: Colors.transparent,
+          child: child,
+        ),
       ),
     );
   }

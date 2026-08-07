@@ -8,6 +8,7 @@ import '../../data/subject_curriculum.dart';
 import '../../data/models/lesson_model.dart';
 import '../../services/weekly_schedule_service.dart';
 import '../../services/ai_recommendation_service.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../subjects/lesson_detail_screen.dart';
 import '../../core/l10n/app_localizations.dart';
 
@@ -155,7 +156,16 @@ class _DayTasksSection extends StatelessWidget {
 
                     // ── حالة التحميل أو الفراغ أو القائمة ──────────
                     if (wsSnap.connectionState == ConnectionState.waiting)
-                      const Center(child: CircularProgressIndicator())
+                      Column(
+                        children: List.generate(3, (index) => 
+                          const SkeletonWidget(
+                            width: double.infinity,
+                            height: 72,
+                            margin: EdgeInsets.only(bottom: 12),
+                            borderRadius: 20,
+                          ),
+                        ),
+                      )
                     else if (allSubjects.isEmpty)
                       _EmptyDayCard(scheme: scheme)
                     else if (todaySubjects.isEmpty && cancelledSet.isNotEmpty)
@@ -354,99 +364,134 @@ class _SubjectTaskTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final schoolSubject = _findSubject();
     final subjectColor = schoolSubject?.color ?? scheme.primary;
-    final bg = done ? scheme.tertiaryContainer : scheme.surfaceContainerLow;
+    
+    final gradientColors = done
+        ? [scheme.tertiaryContainer.withValues(alpha: 0.5), scheme.tertiaryContainer.withValues(alpha: 0.2)]
+        : [scheme.surfaceContainerHighest.withValues(alpha: 0.5), scheme.surfaceContainerLowest];
+
     final fg = done ? scheme.onTertiaryContainer : scheme.onSurface;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: gradientColors,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: done
+              ? scheme.tertiary.withValues(alpha: 0.2)
+              : scheme.outlineVariant.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
       child: Opacity(
-        opacity: done ? 0.5 : 1.0,
+        opacity: done ? 0.6 : 1.0,
         child: Material(
-          color: bg,
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             onTap: done ? null : () => _navigateToCurrentLesson(context),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-            child: Row(
-              children: [
-                // أيقونة الدائرة
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: done
-                        ? scheme.tertiary
-                        : subjectColor.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+              child: Row(
+                children: [
+                  // أيقونة الدائرة
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: done
+                          ? scheme.tertiary
+                          : subjectColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      done
+                          ? Icons.check_rounded
+                          : (schoolSubject?.icon ?? Icons.book_rounded),
+                      size: 22,
+                      color:
+                          done ? scheme.onTertiary : subjectColor,
+                    ),
                   ),
-                  child: Icon(
-                    done
-                        ? Icons.check_rounded
-                        : (schoolSubject?.icon ?? Icons.book_rounded),
-                    size: 20,
-                    color:
-                        done ? scheme.onTertiary : subjectColor,
-                  ),
-                ),
-                const SizedBox(width: 14),
+                  const SizedBox(width: 16),
 
-                // اسم المادة + تلميح "الدرس الحالي"
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        subject,
-                        style: GoogleFonts.tajawal(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: fg,
-                          decoration: done
-                              ? TextDecoration.lineThrough
-                              : TextDecoration.none,
-                          decorationColor: fg.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      if (!done)
+                  // اسم المادة + تلميح "الدرس الحالي"
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          l10n.translate('tap_to_start_current_lesson'),
+                          subject,
                           style: GoogleFonts.tajawal(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            color: subjectColor.withValues(alpha: 0.8),
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w700,
+                            color: fg,
+                            decoration: done
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                            decorationColor: fg.withValues(alpha: 0.5),
                           ),
                         ),
-                    ],
-                  ),
-                ),
-
-                // زر إلغاء المادة من اليوم
-                if (!done)
-                  IconButton(
-                    icon: Icon(
-                      Icons.remove_circle_outline_rounded,
-                      color: scheme.error.withValues(alpha: 0.7),
-                      size: 22,
+                        if (!done)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              l10n.translate('tap_to_start_current_lesson'),
+                              style: GoogleFonts.tajawal(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: subjectColor.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    tooltip: l10n.translate('cancel_subject_today'),
-                    onPressed: () => _confirmCancel(context, l10n),
-                  )
-                else
-                  Icon(
-                    Icons.check_circle_rounded,
-                    color: scheme.tertiary,
-                    size: 22,
                   ),
-              ],
+
+                  // زر إلغاء المادة من اليوم
+                  if (!done)
+                    Container(
+                      margin: const EdgeInsetsDirectional.only(start: 8),
+                      decoration: BoxDecoration(
+                        color: scheme.error.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: scheme.error,
+                          size: 20,
+                        ),
+                        tooltip: l10n.translate('cancel_subject_today'),
+                        onPressed: () => _confirmCancel(context, l10n),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.check_circle_rounded,
+                      color: scheme.tertiary,
+                      size: 24,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 
@@ -818,9 +863,10 @@ class _AiScheduleImprovementSectionState extends State<_AiScheduleImprovementSec
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20),
-        child: Center(child: CircularProgressIndicator()),
+      return const SkeletonWidget(
+        width: double.infinity,
+        height: 160,
+        borderRadius: 24,
       );
     }
 
@@ -829,51 +875,74 @@ class _AiScheduleImprovementSectionState extends State<_AiScheduleImprovementSec
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: widget.scheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            widget.scheme.primary.withValues(alpha: 0.15),
+            widget.scheme.primaryContainer.withValues(alpha: 0.05),
+          ],
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+        ),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: widget.scheme.primary.withValues(alpha: 0.5),
+          color: widget.scheme.primary.withValues(alpha: 0.3),
           width: 1.5,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: widget.scheme.primary.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome, color: widget.scheme.primary),
-              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: widget.scheme.primary.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.auto_awesome_rounded, color: widget.scheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
               Text(
                 'نصيحة الذكاء الاصطناعي',
                 style: GoogleFonts.tajawal(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w800,
                   color: widget.scheme.primary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             _motivation,
             style: GoogleFonts.tajawal(
               fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: widget.scheme.onSurface,
+              height: 1.5,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 10,
+            runSpacing: 10,
             children: _recommendedSubjects.map((sub) {
               return ActionChip(
                 label: Text(sub),
-                backgroundColor: widget.scheme.surface,
+                backgroundColor: widget.scheme.surfaceContainerLowest,
                 labelStyle: GoogleFonts.tajawal(
                   color: widget.scheme.primary,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                 ),
                 side: BorderSide(color: widget.scheme.primary.withValues(alpha: 0.3)),
                 avatar: Icon(Icons.history_edu_rounded, size: 16, color: widget.scheme.primary),

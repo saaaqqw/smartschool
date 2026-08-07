@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:animations/animations.dart';
 import '../home/dashboard_screen.dart';
 import '../grades/grades_screen.dart';
 import '../settings/settings_screen.dart';
@@ -136,53 +136,49 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         }
       },
       child: Scaffold(
-        body: PageView(
-          controller: _pageController,
-          reverse: false,
-          onPageChanged: _onPageChanged,
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
+        body: PageTransitionSwitcher(
+          duration: const Duration(milliseconds: 350),
+          transitionBuilder: (child, animation, secondaryAnimation) {
+            return FadeThroughTransition(
+              animation: animation,
+              secondaryAnimation: secondaryAnimation,
+              fillColor: scheme.surface,
+              child: child,
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey<int>(_currentIndex),
+            child: pages[_currentIndex],
           ),
-          children: pages,
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _currentIndex,
-          selectedItemColor: scheme.primary,
-          unselectedItemColor: scheme.onSurfaceVariant,
-          selectedLabelStyle: GoogleFonts.tajawal(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-          unselectedLabelStyle: GoogleFonts.tajawal(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-          onTap: _goToPage,
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded),
-              activeIcon: Icon(Icons.home_rounded, size: 28),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: _goToPage,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.home_outlined),
+              selectedIcon: const Icon(Icons.home_rounded),
               label: AppLocalizations.of(context).translate('nav_home'),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.menu_book_rounded),
-              activeIcon: Icon(Icons.menu_book_rounded, size: 28),
+            NavigationDestination(
+              icon: const Icon(Icons.menu_book_outlined),
+              selectedIcon: const Icon(Icons.menu_book_rounded),
               label: AppLocalizations.of(context).translate('nav_subjects'),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.event_note_rounded),
-              activeIcon: Icon(Icons.event_note_rounded, size: 28),
+            NavigationDestination(
+              icon: const Icon(Icons.event_note_outlined),
+              selectedIcon: const Icon(Icons.event_note_rounded),
               label: AppLocalizations.of(context).translate('nav_plan'),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart_rounded),
-              activeIcon: Icon(Icons.bar_chart_rounded, size: 28),
+            NavigationDestination(
+              icon: const Icon(Icons.bar_chart_outlined),
+              selectedIcon: const Icon(Icons.bar_chart_rounded),
               label: AppLocalizations.of(context).translate('nav_grades'),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_rounded),
-              activeIcon: Icon(Icons.settings_rounded, size: 28),
+            NavigationDestination(
+              icon: const Icon(Icons.settings_outlined),
+              selectedIcon: const Icon(Icons.settings_rounded),
               label: AppLocalizations.of(context).translate('nav_settings'),
             ),
           ],
