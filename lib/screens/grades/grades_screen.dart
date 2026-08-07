@@ -2,93 +2,19 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../../services/firebase_service.dart';
 import '../../core/stores/user_profile_store.dart';
 import '../../services/ai_recommendation_service.dart';
 import '../../data/subject_curriculum.dart';
 import '../../widgets/shimmer_loading.dart';
+import '../../widgets/skeleton_loader.dart';
+import '../../data/models/grade_entry.dart';
 import '../../services/db_keys.dart';
 import '../../core/l10n/app_localizations.dart';
 
 // ═══════════════════════════════════════════════════════════════
-// نموذج البيانات
-// ═══════════════════════════════════════════════════════════════
-class GradeEntry {
-  const GradeEntry({
-    required this.subject,
-    required this.score,
-    required this.maxScore,
-    required this.color,
-    required this.icon,
-  });
-
-  final String subject;
-  final double score;
-  final double maxScore;
-  final Color color;
-  final IconData icon;
-
-  double get ratio => maxScore > 0 ? (score / maxScore).clamp(0.0, 1.0) : 0;
-  int get percent => (ratio * 100).round();
-
-  /// التقييم النصي بناءً على النسبة المئوية
-  String get ratingKey {
-    if (percent >= 95) return 'rating_exc_plus';
-    if (percent >= 90) return 'rating_exc';
-    if (percent >= 80) return 'rating_vg';
-    if (percent >= 70) return 'rating_good';
-    if (percent >= 60) return 'rating_acc';
-    return 'rating_poor';
-  }
-
-  /// هل تحتاج هذه المادة إلى تحسين (جيد أو أقل)
-  bool get needsImprovement => percent < 80;
-
-  Color get ratingColor {
-    if (percent >= 90) return const Color(0xFF00897B);
-    if (percent >= 80) return const Color(0xFF1E88E5);
-    if (percent >= 70) return const Color(0xFFFB8C00);
-    if (percent >= 60) return const Color(0xFFE53935);
-    return const Color(0xFFB71C1C);
-  }
-
-  static Color colorForSubject(String subject) {
-    const map = {
-      'الرياضيات': Color(0xFF5C6BC0),
-      'العلوم': Color(0xFF26A69A),
-      'التربية الإسلامية': Color(0xFF7E57C2),
-      'القرآن الكريم': Color(0xFF43A047),
-      'اللغة العربية': Color(0xFFE53935),
-      'اللغة الإنجليزية': Color(0xFF1E88E5),
-      'الإنجليزية': Color(0xFF1E88E5),
-      'الاجتماعيات': Color(0xFF6D4C41),
-      'الفيزياء': Color(0xFF00838F),
-      'الكيمياء': Color(0xFFAD1457),
-      'الأحياء': Color(0xFF558B2F),
-      'الحاسوب': Color(0xFF37474F),
-    };
-    return map[subject] ?? Colors.blueGrey;
-  }
-
-  static IconData iconForSubject(String subject) {
-    const map = {
-      'الرياضيات': Icons.calculate_rounded,
-      'العلوم': Icons.science_rounded,
-      'التربية الإسلامية': Icons.mosque_rounded,
-      'القرآن الكريم': Icons.menu_book_rounded,
-      'اللغة العربية': Icons.translate_rounded,
-      'اللغة الإنجليزية': Icons.abc_rounded,
-      'الإنجليزية': Icons.abc_rounded,
-      'الاجتماعيات': Icons.public_rounded,
-      'الفيزياء': Icons.bolt_rounded,
-      'الكيمياء': Icons.biotech_rounded,
-      'الأحياء': Icons.eco_rounded,
-      'الحاسوب': Icons.computer_rounded,
-    };
-    return map[subject] ?? Icons.school_rounded;
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════
 // الشاشة الرئيسية
@@ -128,84 +54,15 @@ class _GradesScreenState extends State<GradesScreen>
   final _svc = FirebaseService();
   late final AnimationController _animCtrl;
 
-  List<double> _weeklyAverages = List.filled(7, 0.0);
-  List<String> _weeklyLabels = List.filled(7, '');
-  bool _isLoadingWeekly = true;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1200),
     )..forward();
     _initGradesIfNeeded();
-    _loadWeeklyData();
-  }
-
-  Future<void> _loadWeeklyData() async {
-    final uid = userProfileNotifier.value.uid;
-    if (uid.isEmpty) return;
-
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('notifications')
-          .orderBy('createdAt', descending: true)
-          .limit(100)
-          .get();
-
-      final now = DateTime.now();
-      final todayMidnight = DateTime(now.year, now.month, now.day);
-      
-      final Map<int, List<double>> dailyScores = {};
-      final List<String> labels = List.filled(7, '');
-      const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-
-      for (int i = 0; i < 7; i++) {
-        final targetDate = todayMidnight.subtract(Duration(days: 6 - i));
-        labels[i] = dayKeys[targetDate.weekday - 1];
-      }
-
-      for (final doc in query.docs) {
-        final d = doc.data();
-        final type = d['type'] as String? ?? '';
-        if (type == 'quiz_result' || type == 'unit_exam_result') {
-          final timestamp = d['createdAt'] as Timestamp?;
-          if (timestamp != null) {
-            final date = timestamp.toDate();
-            final dateMidnight = DateTime(date.year, date.month, date.day);
-            final diffDays = todayMidnight.difference(dateMidnight).inDays;
-            
-            if (diffDays >= 0 && diffDays < 7) {
-              final index = 6 - diffDays;
-              final score = (d['score'] as num?)?.toDouble() ?? 0.0;
-              dailyScores.putIfAbsent(index, () => []).add(score);
-            }
-          }
-        }
-      }
-
-      final List<double> averages = List.filled(7, 0.0);
-      for (int i = 0; i < 7; i++) {
-        if (dailyScores.containsKey(i) && dailyScores[i]!.isNotEmpty) {
-          final sum = dailyScores[i]!.reduce((a, b) => a + b);
-          averages[i] = sum / dailyScores[i]!.length;
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _weeklyAverages = averages;
-          _weeklyLabels = labels;
-          _isLoadingWeekly = false;
-        });
-      }
-    } catch (e) {
-       debugPrint('Error loading weekly data: $e');
-       if (mounted) setState(() => _isLoadingWeekly = false);
-    }
   }
 
   @override
@@ -344,28 +201,17 @@ class _GradesScreenState extends State<GradesScreen>
                 ),
               ),
 
-              // ── أداء آخر 7 أيام ──
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 16, right: 16),
-                  child: _WeeklyGradesChart(
-                    scheme: scheme,
-                    averages: _weeklyAverages,
-                    labels: _weeklyLabels,
-                    isLoading: _isLoadingWeekly,
-                    animCtrl: _animCtrl,
-                  ),
-                ),
-              ),
-
               // ── عنوان الشبكة ──
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
                 sliver: SliverToBoxAdapter(
-                  child: _SectionTitle(
-                    icon: Icons.grid_view_rounded,
-                    title: AppLocalizations.of(context).translate('subject_performance'),
-                    scheme: scheme,
+                  child: Text(
+                    AppLocalizations.of(context).translate('subject_performance'),
+                    style: GoogleFonts.tajawal(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onSurface,
+                    ),
                   ),
                 ),
               ),
@@ -410,43 +256,6 @@ class _GradesScreenState extends State<GradesScreen>
                 ),
               ),
 
-              // ── الجزء السفلي: المواد التي تحتاج إلى تحسين ──
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 10),
-                sliver: SliverToBoxAdapter(
-                  child: _SectionTitle(
-                    icon: Icons.trending_up_rounded,
-                    title: AppLocalizations.of(context).translate('subjects_need_improvement'),
-                    scheme: scheme,
-                    badgeCount: needsImprovement.length,
-                  ),
-                ),
-              ),
-
-              if (needsImprovement.isEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  sliver: SliverToBoxAdapter(
-                    child: _AllGoodCard(scheme: scheme),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _ImprovementCard(
-                          entry: needsImprovement[i],
-                          scheme: scheme,
-                          rank: i + 1,
-                        ),
-                      ),
-                      childCount: needsImprovement.length,
-                    ),
-                  ),
-                ),
             ],
           );
         },
@@ -715,23 +524,28 @@ class _GpaSummaryHeader extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
             scheme.primary,
             scheme.primary.withValues(alpha: 0.8),
-            scheme.tertiary.withValues(alpha: 0.7),
+            scheme.tertiary,
           ],
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: scheme.primary.withValues(alpha: 0.15),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: scheme.primary.withValues(alpha: 0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: scheme.tertiary.withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -899,19 +713,26 @@ class _SubjectCircleCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: AlignmentDirectional.topStart,
+            end: AlignmentDirectional.bottomEnd,
+            colors: [
+              entry.color.withValues(alpha: 0.1),
+              scheme.surfaceContainerLowest,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: entry.needsImprovement
-                ? entry.ratingColor.withValues(alpha: 0.35)
-                : scheme.outlineVariant.withValues(alpha: 0.4),
+                ? entry.ratingColor.withValues(alpha: 0.4)
+                : entry.color.withValues(alpha: 0.15),
             width: entry.needsImprovement ? 1.5 : 1,
           ),
           boxShadow: [
             BoxShadow(
               color: entry.color.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -1062,500 +883,7 @@ class _CircleProgressPainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════════════
 // بطاقة مادة تحتاج إلى تحسين
 // ═══════════════════════════════════════════════════════════════
-class _ImprovementCard extends StatefulWidget {
-  const _ImprovementCard({
-    required this.entry,
-    required this.scheme,
-    required this.rank,
-  });
-
-  final GradeEntry entry;
-  final ColorScheme scheme;
-  final int rank;
-
-  @override
-  State<_ImprovementCard> createState() => _ImprovementCardState();
-}
-
-class _ImprovementCardState extends State<_ImprovementCard> {
-  String _aiAdvice = '';
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchAdvice();
-  }
-
-  Future<void> _fetchAdvice() async {
-    final grade = userProfileNotifier.value.grade.isNotEmpty ? userProfileNotifier.value.grade : 'الصف السابع';
-    final advice = await AiRecommendationService.getSubjectAdvice(
-      subject: widget.entry.subject,
-      score: widget.entry.score,
-      grade: grade,
-    );
-    if (mounted) {
-      setState(() {
-        _aiAdvice = advice;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: widget.scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: widget.entry.ratingColor.withValues(alpha: 0.35),
-          width: 1.5,
-        ),
-      ),
-      child: Row(
-        children: [
-          // ترتيب الأولوية
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: widget.entry.ratingColor.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                '${widget.rank}',
-                style: GoogleFonts.tajawal(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: widget.entry.ratingColor,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          // دائرة صغيرة للتقدم
-          SizedBox(
-            width: 52,
-            height: 52,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: widget.entry.ratio,
-                  strokeWidth: 5,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: widget.entry.color.withValues(alpha: 0.12),
-                  color: widget.entry.color,
-                ),
-                Text(
-                  '${widget.entry.percent}%',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: widget.entry.color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.entry.subject,
-                        style: GoogleFonts.tajawal(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: widget.scheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: widget.entry.ratingColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        AppLocalizations.of(context).translate(widget.entry.ratingKey),
-                        style: GoogleFonts.tajawal(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: widget.entry.ratingColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                _isLoading
-                    ? Row(
-                        children: [
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'جاري تحليل الأداء...',
-                            style: GoogleFonts.tajawal(
-                              fontSize: 11,
-                              color: widget.scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      )
-                    : Text(
-                        _aiAdvice,
-                        style: GoogleFonts.tajawal(
-                          fontSize: 12,
-                          color: widget.scheme.onSurfaceVariant,
-                          height: 1.4,
-                        ),
-                      ),
-                const SizedBox(height: 6),
-                // شريط التقدم
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: widget.entry.ratio,
-                    minHeight: 5,
-                    backgroundColor: widget.entry.color.withValues(alpha: 0.12),
-                    color: widget.entry.color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AiAdviceCard extends StatelessWidget {
-  final ColorScheme scheme;
-  final String advice;
-
-  const _AiAdviceCard({required this.scheme, required this.advice});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.primary.withValues(alpha: 0.1)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: scheme.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.psychology_rounded, color: scheme.primary, size: 28),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'تحليل الذكاء الاصطناعي',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: scheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  advice,
-                  style: GoogleFonts.tajawal(
-                    fontSize: 15,
-                    height: 1.5,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// قسم أداء آخر 7 أيام
-// ═══════════════════════════════════════════════════════════════
-class _WeeklyGradesChart extends StatelessWidget {
-  final ColorScheme scheme;
-  final List<double> averages;
-  final List<String> labels;
-  final bool isLoading;
-  final AnimationController animCtrl;
-
-  const _WeeklyGradesChart({
-    required this.scheme,
-    required this.averages,
-    required this.labels,
-    required this.isLoading,
-    required this.animCtrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: scheme.shadow.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: scheme.secondary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.bar_chart_rounded, color: scheme.secondary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'أداء آخر 7 أيام',
-                style: GoogleFonts.tajawal(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          if (isLoading)
-            const SizedBox(
-              height: 150,
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else if (averages.every((a) => a == 0))
-            SizedBox(
-              height: 150,
-              child: Center(
-                child: Text(
-                  'لا توجد اختبارات في آخر 7 أيام',
-                  style: GoogleFonts.tajawal(
-                    color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              height: 150,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: List.generate(7, (i) {
-                  final score = averages[i]; // 0.0 to 100.0
-                  final ratio = (score / 100).clamp(0.0, 1.0);
-                  
-                  return Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (score > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Text(
-                              '${score.round()}',
-                              style: GoogleFonts.tajawal(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: scheme.primary,
-                              ),
-                            ),
-                          ),
-                        AnimatedBuilder(
-                          animation: animCtrl,
-                          builder: (context, child) {
-                            final delay = i * 0.1;
-                            final t = ((animCtrl.value - delay) / (1 - delay)).clamp(0.0, 1.0);
-                            final height = ratio * 100 * t;
-                            
-                            return Container(
-                              height: height > 0 ? height.clamp(4.0, 100.0) : 4.0,
-                              width: 16,
-                              decoration: BoxDecoration(
-                                color: score > 0 ? scheme.primary : scheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          labels[i],
-                          style: GoogleFonts.tajawal(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.visible,
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ويدجت مساعدة
-// ═══════════════════════════════════════════════════════════════
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.icon,
-    required this.title,
-    required this.scheme,
-    this.badgeCount,
-  });
-
-  final IconData icon;
-  final String title;
-  final ColorScheme scheme;
-  final int? badgeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: scheme.primaryContainer,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 18, color: scheme.onPrimaryContainer),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          title,
-          style: GoogleFonts.tajawal(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            color: scheme.onSurface,
-          ),
-        ),
-        if (badgeCount != null && badgeCount! > 0) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: scheme.errorContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$badgeCount',
-              style: GoogleFonts.tajawal(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: scheme.onErrorContainer,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _AllGoodCard extends StatelessWidget {
-  const _AllGoodCard({required this.scheme});
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      margin: const EdgeInsets.only(bottom: 32),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00897B).withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFF00897B).withValues(alpha: 0.3),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.verified_rounded,
-            color: Color(0xFF00897B),
-            size: 40,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'رائع! كل المواد بمستوى جيد جداً ✨',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF00897B),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'استمر في هذا المستوى المتميز وحافظ على جهودك.',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 13,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// Removed widgets: ImprovementCard, WeeklyGradesChart, SectionTitle, AllGoodCard
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.scheme});
