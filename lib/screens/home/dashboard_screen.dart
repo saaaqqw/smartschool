@@ -9,15 +9,14 @@ import '../../services/firebase_sync_service.dart';
 import '../../services/connectivity_service.dart';
 import '../grades/grades_screen.dart';
 import '../study/study_plan_screen.dart';
-import '../subjects/subjects_screen.dart';
-import '../chat/chat_screen.dart';
 import '../../widgets/profile_image_picker_sheet.dart';
 import '../auth/profile_editor_screen.dart';
-
-import '../../data/subject_curriculum.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../notifications/notifications_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../data/models/grade_entry.dart';
+import 'widgets/dashboard_stats_widgets.dart';
+import 'widgets/radar_plan_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigateToPage});
@@ -35,16 +34,92 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
   final _scheduleService = WeeklyScheduleService();
+  late final AnimationController _animCtrl;
+
+  List<double> _weeklyAverages = List.filled(7, 0.0);
+  List<String> _weeklyLabels = List.filled(7, '');
+  bool _isLoadingWeekly = true;
 
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..forward();
     _loadScheduleSettings();
     _setupTimerFirebaseSync();
+    _fetchWeeklyData();
+  }
+
+  Future<void> _fetchWeeklyData() async {
+    final uid = userProfileNotifier.value.uid;
+    if (uid.isEmpty) return;
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .get();
+
+      final now = DateTime.now();
+      final todayMidnight = DateTime(now.year, now.month, now.day);
+      
+      final Map<int, List<double>> dailyScores = {};
+      final List<String> labels = List.filled(7, '');
+      const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+      for (int i = 0; i < 7; i++) {
+        final targetDate = todayMidnight.subtract(Duration(days: 6 - i));
+        labels[i] = dayKeys[targetDate.weekday - 1];
+      }
+
+      for (final doc in query.docs) {
+        final d = doc.data();
+        final type = d['type'] as String? ?? '';
+        if (type == 'quiz_result' || type == 'unit_exam_result') {
+          final timestamp = d['createdAt'] as Timestamp?;
+          if (timestamp != null) {
+            final date = timestamp.toDate();
+            final dateMidnight = DateTime(date.year, date.month, date.day);
+            final diffDays = todayMidnight.difference(dateMidnight).inDays;
+            
+            if (diffDays >= 0 && diffDays < 7) {
+              final index = 6 - diffDays;
+              final score = (d['score'] as num?)?.toDouble() ?? 0.0;
+              dailyScores.putIfAbsent(index, () => []).add(score);
+            }
+          }
+        }
+      }
+
+      final List<double> averages = List.filled(7, 0.0);
+      for (int i = 0; i < 7; i++) {
+        if (dailyScores.containsKey(i) && dailyScores[i]!.isNotEmpty) {
+          final sum = dailyScores[i]!.reduce((a, b) => a + b);
+          averages[i] = sum / dailyScores[i]!.length;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _weeklyAverages = averages;
+          _weeklyLabels = labels;
+          _isLoadingWeekly = false;
+        });
+      }
+    } catch (e) {
+       debugPrint('Error loading weekly data: $e');
+       if (mounted) setState(() => _isLoadingWeekly = false);
+    }
   }
 
   @override
   void dispose() {
+    _animCtrl.dispose();
     // حفظ حالة المؤقت عند مغادرة الشاشة
     _saveTimerToFirebase();
     super.dispose();
@@ -104,8 +179,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final onPlan = scheme.primaryContainer;
-    final onPlanFg = scheme.onPrimaryContainer;
     final uid = userProfileNotifier.value.uid;
 
     return Scaffold(
@@ -113,140 +186,139 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: ValueListenableBuilder<UserProfile>(
           valueListenable: userProfileNotifier,
           builder: (context, profile, _) {
-            return StreamBuilder<QuerySnapshot>(
-              stream: uid.isEmpty
-                  ? const Stream.empty()
-                  : FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(uid)
-                      .collection('progress')
-                      .snapshots(),
-              builder: (context, snapshot) {
-                double totalProgress = 0;
-                int count = 0;
-
-                if (snapshot.hasData) {
-                  final cleanGrade = profile.grade.isEmpty ? 'الصف السابع' : profile.grade;
-                  final suffix = '__${cleanGrade}__${profile.semester}';
-                  
-                  for (var doc in snapshot.data!.docs) {
-                    if (!doc.id.endsWith(suffix)) continue;
-
-                    final data = doc.data() as Map<String, dynamic>?;
-                    final unitProgress = data?['unitProgress'] as Map<String, dynamic>? ?? {};
-                    if (unitProgress.isNotEmpty) {
-                      double subTotal = 0;
-                      for (final v in unitProgress.values) {
-                        subTotal += (v as num).toDouble();
-                      }
-                      totalProgress += (subTotal / 6); // Assuming 6 units per subject
-                      count++;
-                    }
-                  }
-                }
-
-                // Average progress across all subjects, or 0.0 if no data
-                final avgProgress = count > 0 ? (totalProgress / kTeachableSubjects.length) : 0.0;
-
-                return CustomScrollView(
-                  slivers: [
-                    // ── مؤشر حالة الاتصال ─────────────────────────────────
-                    SliverToBoxAdapter(
-                      child: ValueListenableBuilder<bool>(
-                        valueListenable: ConnectivityService.isOnlineNotifier,
-                        builder: (ctx, isOnline, _) {
-                          if (isOnline) return const SizedBox.shrink();
-                          return Container(
-                            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: Colors.orange.shade300, width: 1),
+            return CustomScrollView(
+              slivers: [
+                // ── مؤشر حالة الاتصال ─────────────────────────────────
+                SliverToBoxAdapter(
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: ConnectivityService.isOnlineNotifier,
+                    builder: (ctx, isOnline, _) {
+                      if (isOnline) return const SizedBox.shrink();
+                      return Container(
+                        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: scheme.errorContainer,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: scheme.error, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.cloud_off_rounded,
+                                size: 16, color: scheme.onErrorContainer),
+                            const SizedBox(width: 6),
+                            Text(
+                              AppLocalizations.of(context).translate('offline_mode'),
+                              style: GoogleFonts.tajawal(
+                                fontSize: 12,
+                                color: scheme.onErrorContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.cloud_off_rounded,
-                                    size: 16, color: Colors.orange.shade700),
-                                const SizedBox(width: 6),
-                                Text(
-                                  AppLocalizations.of(context).translate('offline_mode'),
-                                  style: GoogleFonts.tajawal(
-                                    fontSize: 12,
-                                    color: Colors.orange.shade700,
-                                    fontWeight: FontWeight.w600,
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: _Header(
+                      scheme: scheme,
+                      profile: profile,
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  sliver: SliverToBoxAdapter(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: uid.isEmpty
+                          ? const Stream.empty()
+                          : FirebaseFirestore.instance
+                              .collection('grades')
+                              .where('userId', isEqualTo: uid)
+                              .where('semester', isEqualTo: profile.semester)
+                              .snapshots(),
+                      builder: (context, snapshot) {
+                        final entries = snapshot.hasData
+                            ? GradeEntry.parseList(snapshot.data!.docs)
+                            : <GradeEntry>[];
+                        
+                        final needsImprovement = entries.where((e) => e.needsImprovement).toList();
+
+                        return Column(
+                          children: [
+                            // ── خطة اليوم (Radar Chart) ──
+                            RadarPlanCard(
+                              entries: entries,
+                              scheme: scheme,
+                              onOpenPlan: () {
+                                _openTab(
+                                  context,
+                                  2,
+                                  () => Navigator.of(context).push(StudyPlanScreen.route()),
+                                );
+                              },
+                              onOpenGrades: () {
+                                _openTab(
+                                  context,
+                                  3,
+                                  () => Navigator.of(context).push(GradesScreen.route()),
+                                );
+                              },
+                            ),
+
+                            // ── أداء آخر 7 أيام ──
+                            Padding(
+                              padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
+                              child: WeeklyGradesChart(
+                                scheme: scheme,
+                                averages: _weeklyAverages,
+                                labels: _weeklyLabels,
+                                isLoading: _isLoadingWeekly,
+                                animCtrl: _animCtrl,
+                              ),
+                            ),
+
+                            // ── المواد التي تحتاج تحسين ──
+                            Padding(
+                              padding: const EdgeInsets.only(top: 24.0, bottom: 10.0),
+                              child: SectionTitle(
+                                icon: Icons.trending_up_rounded,
+                                title: AppLocalizations.of(context).translate('subjects_need_improvement'),
+                                scheme: scheme,
+                                badgeCount: needsImprovement.length,
+                              ),
+                            ),
+                            
+                            if (needsImprovement.isEmpty)
+                              AllGoodCard(scheme: scheme)
+                            else
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: needsImprovement.length,
+                                itemBuilder: (ctx, i) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: ImprovementCard(
+                                    entry: needsImprovement[i],
+                                    scheme: scheme,
+                                    rank: i + 1,
                                   ),
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      sliver: SliverToBoxAdapter(
-                        child: _Header(
-                          scheme: scheme,
-                          profile: profile,
-                        ),
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      sliver: SliverToBoxAdapter(
-                        child: _TodayPlanCard(
-                          backgroundColor: onPlan,
-                          foregroundColor: onPlanFg,
-                          progress: avgProgress,
-                          onOpenPlan: () {
-                            _openTab(
-                              context,
-                              2,
-                              () => Navigator.of(context).push(StudyPlanScreen.route()),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    // تمت إزالة قسم المهام اليومية من هنا ونقله إلى صفحة الخطة.
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                      sliver: SliverToBoxAdapter(
-                        child: _QuickActions(
-                          onStartStudy: () {
-                            _openTab(
-                              context,
-                              1,
-                              () => Navigator.of(context).push(SubjectsScreen.route()),
-                            );
-                          },
-                          onGrades: () {
-                            _openTab(
-                              context,
-                              3,
-                              () => Navigator.of(context).push(GradesScreen.route()),
-                            );
-                          },
-                          onReview: () {
-                            _openTab(
-                              context,
-                              2,
-                              () => Navigator.of(context).push(StudyPlanScreen.route()),
-                            );
-                          },
-                          onChat: () {
-                            Navigator.of(context).push(ChatScreen.route());
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -393,226 +465,3 @@ class _NotificationBellButton extends StatelessWidget {
     );
   }
 }
-
-class _TodayPlanCard extends StatelessWidget {
-  const _TodayPlanCard({
-    required this.backgroundColor,
-    required this.foregroundColor,
-    required this.progress,
-    required this.onOpenPlan,
-  });
-
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final double progress;
-  final VoidCallback onOpenPlan;
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = (progress * 100).round();
-
-    return Card(
-      elevation: 0,
-      color: backgroundColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpenPlan,
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.event_note_rounded,
-                    color: foregroundColor,
-                    size: 26,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    AppLocalizations.of(context).translate('today_plan'),
-                    style: GoogleFonts.tajawal(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: foregroundColor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  SizedBox(
-                    height: MediaQuery.of(context).size.width * 0.22,
-                    width: MediaQuery.of(context).size.width * 0.22,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          height: MediaQuery.of(context).size.width * 0.22,
-                          width: MediaQuery.of(context).size.width * 0.22,
-                          child: CircularProgressIndicator(
-                            value: progress,
-                            strokeWidth: 8,
-                            strokeCap: StrokeCap.round,
-                            backgroundColor:
-                                foregroundColor.withValues(alpha: 0.2),
-                            color: foregroundColor,
-                          ),
-                        ),
-                        Text(
-                          '$pct%',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: foregroundColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          AppLocalizations.of(context).translate('completed'),
-                          style: GoogleFonts.tajawal(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: foregroundColor,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 10,
-                            backgroundColor:
-                                foregroundColor.withValues(alpha: 0.2),
-                            color: foregroundColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({
-    required this.onStartStudy,
-    required this.onGrades,
-    required this.onReview,
-    required this.onChat,
-  });
-
-  final VoidCallback onStartStudy;
-  final VoidCallback onGrades;
-  final VoidCallback onReview;
-  final VoidCallback onChat;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    Widget action({
-      required String label,
-      required IconData icon,
-      required Color color,
-      required VoidCallback onTap,
-    }) {
-      return SizedBox(
-        width: MediaQuery.of(context).size.width / 2 - 28,
-        child: FilledButton.tonal(
-          onPressed: onTap,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            backgroundColor: color.withValues(alpha: 0.15),
-            foregroundColor: scheme.onSurface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.tajawal(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          AppLocalizations.of(context).translate('quick_actions'),
-          style: GoogleFonts.tajawal(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurface,
-          ),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            action(
-              label: AppLocalizations.of(context).translate('start_study'),
-              icon: Icons.play_circle_filled_rounded,
-              color: const Color(0xFF00897B),
-              onTap: onStartStudy,
-            ),
-            action(
-              label: AppLocalizations.of(context).translate('grades'),
-              icon: Icons.bar_chart_rounded,
-              color: const Color(0xFF5E35B1),
-              onTap: onGrades,
-            ),
-            action(
-              label: AppLocalizations.of(context).translate('review'),
-              icon: Icons.auto_stories_rounded,
-              color: const Color(0xFFE65100),
-              onTap: onReview,
-            ),
-            action(
-              label: AppLocalizations.of(context).translate('ai_assistant'),
-              icon: Icons.auto_awesome_rounded,
-              color: scheme.primary,
-              onTap: onChat,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// تمت إزالة الكلاسات الخاصة بقسم مهام اليوم ونقلها بالكامل إلى plan_screen.dart.
-
